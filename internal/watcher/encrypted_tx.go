@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
 type EncryptedTxWatcher struct {
@@ -29,14 +30,11 @@ func NewEncryptedTxWatcher(config *metricsCommon.Config, encryptedTxChannel chan
 	}
 }
 
-func (etw *EncryptedTxWatcher) Start(ctx context.Context) error {
-	errChan := make(chan error, 1)
-	go func() {
+func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner) error {
+	runner.Go(func() error {
 		sequencerContract, err := sequencerBindings.NewSequencer(common.HexToAddress(etw.config.ContractAddress), etw.ethClient)
-
 		if err != nil {
-			errChan <- err
-			return
+			return err
 		}
 
 		ctx := context.Background()
@@ -46,16 +44,14 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context) error {
 
 		sub, err := sequencerContract.WatchTransactionSubmitted(watchOpts, txSubmittedEventChannel)
 		if err != nil {
-			errChan <- err
-			return
+			return err
 		}
 		defer sub.Unsubscribe()
 
 		for {
 			select {
 			case <-ctx.Done():
-				errChan <- err
-				return
+				return err
 			case event := <-txSubmittedEventChannel:
 				ev := &EncryptedTxReceivedEvent{
 					Tx:   event.EncryptedTransaction,
@@ -63,12 +59,9 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context) error {
 				}
 				etw.encryptedTxChannel <- ev
 			case err := <-sub.Err():
-				errChan <- err
-				return
+				return err
 			}
 		}
-	}()
-
-	err := <-errChan
-	return err
+	})
+	return nil
 }

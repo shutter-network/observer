@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
 type BlocksWatcher struct {
@@ -28,22 +29,19 @@ func NewBlocksWatcher(config *common.Config, blocksChannel chan *BlockReceivedEv
 	}
 }
 
-func (bw *BlocksWatcher) Start(ctx context.Context) error {
-	errChan := make(chan error, 1)
-	go func() {
+func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error {
+	runner.Go(func() error {
 		newHeads := make(chan *types.Header)
 		sub, err := bw.ethClient.SubscribeNewHead(ctx, newHeads)
 		if err != nil {
-			errChan <- err
-			return
+			return err
 		}
 		defer sub.Unsubscribe()
 
 		for {
 			select {
 			case <-ctx.Done():
-				errChan <- err
-				return
+				return err
 			case head := <-newHeads:
 				bw.logNewHead(head)
 				ev := &BlockReceivedEvent{
@@ -52,14 +50,12 @@ func (bw *BlocksWatcher) Start(ctx context.Context) error {
 				}
 				bw.blocksChannel <- ev
 			case err := <-sub.Err():
-				errChan <- err
-				return
+				return err
 			}
 		}
-	}()
+	})
 
-	err := <-errChan
-	return err
+	return nil
 }
 
 func (w *BlocksWatcher) logNewHead(head *types.Header) {
