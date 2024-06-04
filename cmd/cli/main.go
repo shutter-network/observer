@@ -45,6 +45,7 @@ func Start() error {
 
 	// start watchers here
 
+	fmt.Println("cli started")
 	ctx := context.Background()
 
 	watcher := watcher.New(&config)
@@ -52,7 +53,6 @@ func Start() error {
 	runner := runner.NewRunner(ctx)
 	watcher.Start(ctx, runner)
 
-	fmt.Println("cli started")
 	return nil
 }
 
