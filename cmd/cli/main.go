@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/internal/runner"
+	"github.com/shutter-network/gnosh-metrics/internal/watcher"
 	"github.com/spf13/cobra"
 )
 
@@ -41,6 +44,13 @@ func Cmd() *cobra.Command {
 func Start() error {
 
 	// start watchers here
+
+	ctx := context.Background()
+
+	watcher := watcher.New(&config)
+
+	runner := runner.NewRunner(ctx)
+	watcher.Start(ctx, runner)
 
 	fmt.Println("cli started")
 	return nil
