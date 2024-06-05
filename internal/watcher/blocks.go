@@ -22,10 +22,11 @@ type BlockReceivedEvent struct {
 	Time   time.Time
 }
 
-func NewBlocksWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent) *BlocksWatcher {
+func NewBlocksWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, ethClient *ethclient.Client) *BlocksWatcher {
 	return &BlocksWatcher{
 		config:        config,
 		blocksChannel: blocksChannel,
+		ethClient:     ethClient,
 	}
 }
 

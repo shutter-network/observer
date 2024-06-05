@@ -23,10 +23,11 @@ type EncryptedTxReceivedEvent struct {
 	Time time.Time
 }
 
-func NewEncryptedTxWatcher(config *metricsCommon.Config, encryptedTxChannel chan *EncryptedTxReceivedEvent) *EncryptedTxWatcher {
+func NewEncryptedTxWatcher(config *metricsCommon.Config, encryptedTxChannel chan *EncryptedTxReceivedEvent, ethClient *ethclient.Client) *EncryptedTxWatcher {
 	return &EncryptedTxWatcher{
 		config:             config,
 		encryptedTxChannel: encryptedTxChannel,
+		ethClient:          ethClient,
 	}
 }
 

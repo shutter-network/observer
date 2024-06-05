@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
@@ -22,8 +23,13 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 
-	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel)
-	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel)
+	ethClient, err := ethclient.Dial(w.config.RpcURL)
+	if err != nil {
+		return err
+	}
+
+	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
+	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
 	// decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel)
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher); err != nil {
 		return err
