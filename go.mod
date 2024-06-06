@@ -161,6 +161,7 @@ require (
 require (
 	github.com/ethereum/go-ethereum v1.13.11
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/libp2p/go-libp2p-core v0.20.1
 	github.com/rs/zerolog v1.33.0
 	github.com/shutter-network/gnosh-contracts v0.2.0
 	github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20240522150804-d9d079efbaf5
