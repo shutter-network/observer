@@ -30,8 +30,8 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
-	// decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher); err != nil {
+	decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel)
+	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher); err != nil {
 		return err
 	}
 

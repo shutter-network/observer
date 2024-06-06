@@ -25,8 +25,11 @@ type DecryptionKeysWatcher struct {
 
 func NewDecryptionKeysWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent) *DecryptionKeysWatcher {
 	return &DecryptionKeysWatcher{
-		config:        config,
-		blocksChannel: blocksChannel,
+		config:          config,
+		blocksChannel:   blocksChannel,
+		recentBlocksMux: sync.Mutex{},
+		recentBlocks:    make(map[uint64]*BlockReceivedEvent),
+		mostRecentBlock: 0,
 	}
 }
 
