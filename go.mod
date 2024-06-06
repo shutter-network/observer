@@ -4,8 +4,9 @@ go 1.22.0
 
 require (
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
-	github.com/pkg/errors v0.9.1
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/spf13/cobra v1.8.0
+	github.com/spf13/viper v1.13.0
 	golang.org/x/sync v0.7.0
 )
 
@@ -28,7 +29,6 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
-	github.com/ferranbt/fastssz v0.1.3 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -86,7 +86,6 @@ require (
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
@@ -105,6 +104,7 @@ require (
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/prometheus/client_golang v1.17.0 // indirect
 	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
@@ -121,7 +121,6 @@ require (
 	github.com/spf13/afero v1.8.2 // indirect
 	github.com/spf13/cast v1.5.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
-	github.com/spf13/viper v1.13.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
@@ -161,7 +160,6 @@ require (
 require (
 	github.com/ethereum/go-ethereum v1.13.11
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/libp2p/go-libp2p-core v0.20.1
 	github.com/rs/zerolog v1.33.0
 	github.com/shutter-network/gnosh-contracts v0.2.0
 	github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20240522150804-d9d079efbaf5

@@ -57,8 +57,6 @@ func Cmd() *cobra.Command {
 func Start() error {
 
 	// start watchers here
-
-	fmt.Println("cli started")
 	ctx := context.Background()
 
 	watcher := watcher.New(&config)
