@@ -5,6 +5,7 @@ import "sync"
 type TxMetrics interface {
 	AddEncryptedTx(identity string, encryptedTx []byte)
 	AddDecryptionData(identity string, dd *DecryptionData)
+	HasCompleteTx(identity string) bool
 }
 
 type DecryptionData struct {
@@ -51,4 +52,12 @@ func (tm *TxMapper) AddDecryptionData(identity string, dd *DecryptionData) {
 		tm.Data[identity] = tx
 	}
 	tx.DD = dd
+}
+
+func (tm *TxMapper) HasCompleteTx(identity string) bool {
+	tx, exists := tm.Data[identity]
+	if !exists {
+		return false
+	}
+	return len(tx.EncryptedTx) > 0 && tx.DD != nil
 }
