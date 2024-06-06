@@ -1,11 +1,15 @@
 package metrics
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 type TxMetrics interface {
 	AddEncryptedTx(identity string, encryptedTx []byte)
 	AddDecryptionData(identity string, dd *DecryptionData)
 	HasCompleteTx(identity string) bool
+	RemoveTx(identity string) bool
 }
 
 type DecryptionData struct {
@@ -60,4 +64,13 @@ func (tm *TxMapper) HasCompleteTx(identity string) bool {
 		return false
 	}
 	return len(tx.EncryptedTx) > 0 && tx.DD != nil
+}
+
+func (tm *TxMapper) RemoveTx(identity string) error {
+	if !tm.HasCompleteTx(identity) {
+		return errors.New("unable to delete incomplete Tx")
+	}
+
+	delete(tm.Data, identity)
+	return nil
 }
