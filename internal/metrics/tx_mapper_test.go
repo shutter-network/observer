@@ -66,7 +66,7 @@ func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *
 	return eonPublicKey, epochSecretKey, epochID
 }
 
-func TestAddTx(t *testing.T) {
+func TestAddTxWhenEncryptionTxReceivedFirst(t *testing.T) {
 	txMapper := NewTxMapper()
 
 	eonPublicKey, decryptionKey, identity := makeKeys(t)
@@ -95,6 +95,40 @@ func TestAddTx(t *testing.T) {
 		Key:  decryptionKey.Marshal(),
 		Slot: rand.Uint64(),
 	})
+
+	hasComplete = txMapper.HasCompleteTx(string(identity.Marshal()))
+	assert.Assert(t, hasComplete)
+}
+
+func TestAddTxWhenDecryptionKeysReceivedFirst(t *testing.T) {
+	txMapper := NewTxMapper()
+
+	eonPublicKey, decryptionKey, identity := makeKeys(t)
+
+	txMapper.AddDecryptionData(string(identity.Marshal()), &DecryptionData{
+		Key:  decryptionKey.Marshal(),
+		Slot: rand.Uint64(),
+	})
+
+	_, ok := txMapper.Data[string(identity.Marshal())]
+
+	assert.Assert(t, ok)
+
+	hasComplete := txMapper.HasCompleteTx(string(identity.Marshal()))
+	assert.Assert(t, !hasComplete)
+
+	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
+	assert.NilError(t, err)
+	encryptedTransaction := shcrypto.Encrypt(tx, eonPublicKey, identity, sigma)
+
+	encrypedTxBytes := encryptedTransaction.Marshal()
+
+	txMapper.AddEncryptedTx(string(identity.Marshal()), encrypedTxBytes)
+
+	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
+	assert.NilError(t, err)
+
+	assert.Assert(t, bytes.Equal(tx, decryptedMessage))
 
 	hasComplete = txMapper.HasCompleteTx(string(identity.Marshal()))
 	assert.Assert(t, hasComplete)
