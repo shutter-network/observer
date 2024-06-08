@@ -1,14 +1,28 @@
 package metrics
 
 import (
-	"crypto/rand"
+	"bytes"
 	"math/big"
+	"math/rand"
 	"testing"
+
+	cryptorand "crypto/rand"
 
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
 	"gotest.tools/assert"
+)
+
+var tx = []byte("mimic an evm compatible transaction")
+
+func equalG2(a, b *bls12381.PointG2) bool {
+	g2 := bls12381.NewG2()
+	return g2.Equal(a, b)
+}
+
+var (
+	g2Comparer = gocmp.Comparer(equalG2)
 )
 
 func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *shcrypto.EpochID) {
@@ -21,7 +35,7 @@ func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *
 	ps := []*shcrypto.Polynomial{}
 	gammas := []*shcrypto.Gammas{}
 	for i := 0; i < n; i++ {
-		p, err := shcrypto.RandomPolynomial(rand.Reader, threshold-1)
+		p, err := shcrypto.RandomPolynomial(cryptorand.Reader, threshold-1)
 		assert.NilError(t, err)
 		ps = append(ps, p)
 		gammas = append(gammas, p.Gammas())
@@ -43,7 +57,7 @@ func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *
 		epochSecretKeyShares = append(epochSecretKeyShares, shcrypto.ComputeEpochSecretKeyShare(eonSecretKeyShares[i], epochID))
 	}
 	eonPublicKey := shcrypto.ComputeEonPublicKey(gammas)
-	assert.DeepEqual(t, g2.MulScalar(new(bls12381.PointG2), g2.One(), eonSecretKey), (*bls12381.PointG2)(eonPublicKey), gocmp.Comparer(equalG1))
+	assert.DeepEqual(t, g2.MulScalar(new(bls12381.PointG2), g2.One(), eonSecretKey), (*bls12381.PointG2)(eonPublicKey), g2Comparer)
 	epochSecretKey, err := shcrypto.ComputeEpochSecretKey(
 		[]int{0, 1},
 		[]*shcrypto.EpochSecretKeyShare{epochSecretKeyShares[0], epochSecretKeyShares[1]},
@@ -52,12 +66,36 @@ func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *
 	return eonPublicKey, epochSecretKey, epochID
 }
 
-func equalG1(a, b *bls12381.PointG1) bool {
-	g1 := bls12381.NewG1()
-	return g1.Equal(a, b)
-}
+func TestAddTx(t *testing.T) {
+	txMapper := NewTxMapper()
 
-func equalG2(a, b *bls12381.PointG2) bool {
-	g2 := bls12381.NewG2()
-	return g2.Equal(a, b)
+	eonPublicKey, decryptionKey, identity := makeKeys(t)
+
+	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
+	assert.NilError(t, err)
+	encryptedTransaction := shcrypto.Encrypt(tx, eonPublicKey, identity, sigma)
+
+	encrypedTxBytes := encryptedTransaction.Marshal()
+
+	txMapper.AddEncryptedTx(string(identity.Marshal()), encrypedTxBytes)
+
+	_, ok := txMapper.Data[string(identity.Marshal())]
+
+	assert.Assert(t, ok)
+
+	hasComplete := txMapper.HasCompleteTx(string(identity.Marshal()))
+	assert.Assert(t, !hasComplete)
+
+	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
+	assert.NilError(t, err)
+
+	assert.Assert(t, bytes.Equal(tx, decryptedMessage))
+
+	txMapper.AddDecryptionData(string(identity.Marshal()), &DecryptionData{
+		Key:  decryptionKey.Marshal(),
+		Slot: rand.Uint64(),
+	})
+
+	hasComplete = txMapper.HasCompleteTx(string(identity.Marshal()))
+	assert.Assert(t, hasComplete)
 }

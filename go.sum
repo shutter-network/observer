@@ -546,6 +546,8 @@ github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.202405221508
 github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20240522150804-d9d079efbaf5/go.mod h1:ojyXDNjCBh56ZbRfsxNncc0Y7GlElVLkCErPeKjDySg=
 github.com/shutter-network/shutter/shlib v0.1.18 h1:ei1EWEavnlkwbX51aGKtgt7NydY0IPNV35J525vAfeo=
 github.com/shutter-network/shutter/shlib v0.1.18/go.mod h1:RlYNZjx+pfKAi0arH+jfdlxG4kQ75UFzDfVjgCVYaUw=
+github.com/shutter-network/shutter/shlib v0.1.19-0.20240520193152-f4f56ef19f9e h1:ApPJlt+gwY3s8XcoDEf3kTHpK1TWxAUubCRyyrtb01U=
+github.com/shutter-network/shutter/shlib v0.1.19-0.20240520193152-f4f56ef19f9e/go.mod h1:RlYNZjx+pfKAi0arH+jfdlxG4kQ75UFzDfVjgCVYaUw=
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/smartystreets/assertions v1.2.0 h1:42S6lae5dvLc7BrLu/0ugRtcFVjoJNMC/N3yZFZkDFs=
 github.com/smartystreets/assertions v1.2.0/go.mod h1:tcbTF8ujkAEcZ8TElKY+i30BzYlVhC/LOxJk7iOWnoo=

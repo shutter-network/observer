@@ -3,11 +3,14 @@ module github.com/shutter-network/gnosh-metrics
 go 1.22.0
 
 require (
+	github.com/google/go-cmp v0.6.0
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
 	github.com/mitchellh/mapstructure v1.5.0
+	github.com/shutter-network/shutter/shlib v0.1.19-0.20240520193152-f4f56ef19f9e
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.13.0
 	golang.org/x/sync v0.7.0
+	gotest.tools v2.2.0+incompatible
 )
 
 require (
@@ -39,7 +42,6 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20231023181126-ff6d637d2a7b // indirect
 	github.com/google/uuid v1.4.0 // indirect
@@ -116,7 +118,6 @@ require (
 	github.com/quic-go/webtransport-go v0.6.0 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
-	github.com/shutter-network/shutter/shlib v0.1.18 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
 	github.com/spf13/cast v1.5.1 // indirect
@@ -152,7 +153,6 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gotest.tools v2.2.0+incompatible // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
