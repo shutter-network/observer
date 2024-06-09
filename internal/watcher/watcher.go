@@ -2,9 +2,9 @@ package watcher
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
@@ -43,15 +43,22 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 		select {
 		case enTx := <-encryptedTxChannel:
 			txMapper.AddEncryptedTx(string(enTx.Identity.Marshal()), enTx.Tx)
-			fmt.Println("transactions", enTx)
+
+			log.Info().
+				Bytes("encrypted transaction", enTx.Tx).
+				Msg("new encrypted transaction")
+
 		case dd := <-decryptionDataChannel:
 			for _, key := range dd.Keys {
 				txMapper.AddDecryptionData(string(key.Identity), &metrics.DecryptionData{
 					Key:  key.Key,
 					Slot: dd.Slot,
 				})
+				log.Info().
+					Bytes("decryption keys", key.Key).
+					Uint64("slot", dd.Slot).
+					Msg("new decryption key")
 			}
-			fmt.Println("decrytion data", dd)
 		}
 	}
 }
