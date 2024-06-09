@@ -12,6 +12,10 @@ type TxMetrics interface {
 	RemoveTx(identity string) bool
 }
 
+var (
+	Metrics_ERR_UnableToDeleteTx = "unable to remove Tx which cant be decrypted"
+)
+
 type DecryptionData struct {
 	Key  []byte
 	Slot uint64
@@ -68,7 +72,7 @@ func (tm *TxMapper) CanBeDecrypted(identity string) bool {
 
 func (tm *TxMapper) RemoveTx(identity string) error {
 	if !tm.CanBeDecrypted(identity) {
-		return errors.New("unable to delete incomplete Tx")
+		return errors.New(Metrics_ERR_UnableToDeleteTx)
 	}
 
 	delete(tm.Data, identity)
