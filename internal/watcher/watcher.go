@@ -41,6 +41,7 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 
 	for {
 		select {
+		//TODO: clean memory if !txMapper.CanBeDecrypted for more then 30 mins
 		case enTx := <-encryptedTxChannel:
 			txMapper.AddEncryptedTx(string(enTx.Identity.Marshal()), enTx.Tx)
 

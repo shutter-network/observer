@@ -26,10 +26,11 @@ type Tx struct {
 	DD          *DecryptionData
 }
 
+// TxMapper will hold encryption and decryption data
+// we dont need to store the encrypted transaction and if the transcation was included.
+// since we can compute these things on the fly when requested with data which
+// exists in the Mapper.
 type TxMapper struct {
-	/// Data will hold encryption and decryption data
-	/// we dont need to store the encrypted transaction/ if the transcation was included.
-	/// since we can compute these things on the fly with data which exists in the Mapper.
 	Data  map[string]*Tx
 	mutex sync.Mutex
 }
