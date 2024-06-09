@@ -83,7 +83,7 @@ func TestAddTxWhenEncryptionTxReceivedFirst(t *testing.T) {
 
 	assert.Assert(t, ok)
 
-	hasComplete := txMapper.HasCompleteTx(string(identity.Marshal()))
+	hasComplete := txMapper.CanBeDecrypted(string(identity.Marshal()))
 	assert.Assert(t, !hasComplete)
 
 	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
@@ -96,7 +96,7 @@ func TestAddTxWhenEncryptionTxReceivedFirst(t *testing.T) {
 		Slot: rand.Uint64(),
 	})
 
-	hasComplete = txMapper.HasCompleteTx(string(identity.Marshal()))
+	hasComplete = txMapper.CanBeDecrypted(string(identity.Marshal()))
 	assert.Assert(t, hasComplete)
 }
 
@@ -114,7 +114,7 @@ func TestAddTxWhenDecryptionKeysReceivedFirst(t *testing.T) {
 
 	assert.Assert(t, ok)
 
-	hasComplete := txMapper.HasCompleteTx(string(identity.Marshal()))
+	hasComplete := txMapper.CanBeDecrypted(string(identity.Marshal()))
 	assert.Assert(t, !hasComplete)
 
 	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
@@ -130,6 +130,6 @@ func TestAddTxWhenDecryptionKeysReceivedFirst(t *testing.T) {
 
 	assert.Assert(t, bytes.Equal(tx, decryptedMessage))
 
-	hasComplete = txMapper.HasCompleteTx(string(identity.Marshal()))
+	hasComplete = txMapper.CanBeDecrypted(string(identity.Marshal()))
 	assert.Assert(t, hasComplete)
 }

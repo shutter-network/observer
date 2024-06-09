@@ -58,7 +58,7 @@ func (tm *TxMapper) AddDecryptionData(identity string, dd *DecryptionData) {
 	tx.DD = dd
 }
 
-func (tm *TxMapper) HasCompleteTx(identity string) bool {
+func (tm *TxMapper) CanBeDecrypted(identity string) bool {
 	tx, exists := tm.Data[identity]
 	if !exists {
 		return false
@@ -67,7 +67,7 @@ func (tm *TxMapper) HasCompleteTx(identity string) bool {
 }
 
 func (tm *TxMapper) RemoveTx(identity string) error {
-	if !tm.HasCompleteTx(identity) {
+	if !tm.CanBeDecrypted(identity) {
 		return errors.New("unable to delete incomplete Tx")
 	}
 
