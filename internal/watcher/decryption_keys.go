@@ -15,21 +15,28 @@ import (
 )
 
 type DecryptionKeysWatcher struct {
-	config        *common.Config
-	blocksChannel chan *BlockReceivedEvent
+	config                *common.Config
+	blocksChannel         chan *BlockReceivedEvent
+	decryptionDataChannel chan *DecryptionData
 
 	recentBlocksMux sync.Mutex
 	recentBlocks    map[uint64]*BlockReceivedEvent
 	mostRecentBlock uint64
 }
 
-func NewDecryptionKeysWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent) *DecryptionKeysWatcher {
+type DecryptionData struct {
+	Keys []*p2pmsg.Key
+	Slot uint64
+}
+
+func NewDecryptionKeysWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, decryptionDataChannel chan *DecryptionData) *DecryptionKeysWatcher {
 	return &DecryptionKeysWatcher{
-		config:          config,
-		blocksChannel:   blocksChannel,
-		recentBlocksMux: sync.Mutex{},
-		recentBlocks:    make(map[uint64]*BlockReceivedEvent),
-		mostRecentBlock: 0,
+		config:                config,
+		blocksChannel:         blocksChannel,
+		decryptionDataChannel: decryptionDataChannel,
+		recentBlocksMux:       sync.Mutex{},
+		recentBlocks:          make(map[uint64]*BlockReceivedEvent),
+		mostRecentBlock:       0,
 	}
 }
 
@@ -59,6 +66,11 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(_ context.Context, msgUntyped p2
 	t := time.Now()
 	msg := msgUntyped.(*p2pmsg.DecryptionKeys)
 	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
+
+	dkw.decryptionDataChannel <- &DecryptionData{
+		Keys: msg.Keys,
+		Slot: extra.Slot,
+	}
 
 	ev, ok := dkw.getRecentBlock(extra.Slot)
 	if !ok {

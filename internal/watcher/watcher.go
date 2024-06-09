@@ -22,6 +22,7 @@ func New(config *common.Config) *Watcher {
 func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
+	decryptionDataChannel := make(chan *DecryptionData)
 
 	ethClient, err := ethclient.Dial(w.config.RpcURL)
 	if err != nil {
@@ -30,7 +31,7 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
-	decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel)
+	decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel, decryptionDataChannel)
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher); err != nil {
 		return err
 	}
@@ -41,6 +42,9 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 			fmt.Println("blocks", block)
 		case enTx := <-encryptedTxChannel:
 			fmt.Println("transactions", enTx)
+
+		case dd := <-decryptionDataChannel:
+			fmt.Println("decrytion data", dd)
 		}
 	}
 }
