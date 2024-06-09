@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
@@ -20,6 +21,8 @@ func New(config *common.Config) *Watcher {
 }
 
 func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
+
+	txMapper := metrics.NewTxMapper()
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionData)
@@ -38,12 +41,16 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 
 	for {
 		select {
-		case block := <-blocksChannel:
-			fmt.Println("blocks", block)
 		case enTx := <-encryptedTxChannel:
+			txMapper.AddEncryptedTx(string(enTx.Identity.Marshal()), enTx.Tx)
 			fmt.Println("transactions", enTx)
-
 		case dd := <-decryptionDataChannel:
+			for _, key := range dd.Keys {
+				txMapper.AddDecryptionData(string(key.Identity), &metrics.DecryptionData{
+					Key:  key.Key,
+					Slot: dd.Slot,
+				})
+			}
 			fmt.Println("decrytion data", dd)
 		}
 	}

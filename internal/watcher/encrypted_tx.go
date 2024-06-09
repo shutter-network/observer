@@ -9,7 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/identitypreimage"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
+	"github.com/shutter-network/shutter/shlib/shcrypto"
 )
 
 type EncryptedTxWatcher struct {
@@ -19,8 +21,9 @@ type EncryptedTxWatcher struct {
 }
 
 type EncryptedTxReceivedEvent struct {
-	Tx   []byte
-	Time time.Time
+	Identity *shcrypto.EpochID
+	Tx       []byte
+	Time     time.Time
 }
 
 func NewEncryptedTxWatcher(config *metricsCommon.Config, encryptedTxChannel chan *EncryptedTxReceivedEvent, ethClient *ethclient.Client) *EncryptedTxWatcher {
@@ -54,9 +57,11 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner)
 			case <-ctx.Done():
 				return err
 			case event := <-txSubmittedEventChannel:
+				imageBytes := append(event.IdentityPrefix[:], event.Sender.Bytes()...)
 				ev := &EncryptedTxReceivedEvent{
-					Tx:   event.EncryptedTransaction,
-					Time: time.Now(),
+					Identity: shcrypto.ComputeEpochID(identitypreimage.IdentityPreimage(imageBytes).Bytes()),
+					Tx:       event.EncryptedTransaction,
+					Time:     time.Now(),
 				}
 				etw.encryptedTxChannel <- ev
 			case err := <-sub.Err():
