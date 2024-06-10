@@ -42,7 +42,7 @@ func Cmd() *cobra.Command {
 		&config.ContractAddress,
 		"contract-address",
 		"",
-		"",
+		"0xd073BD5A717Dce1832890f2Fdd9F4fBC4555e41A",
 		"sequencer contract address",
 	)
 
