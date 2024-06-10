@@ -1,9 +1,8 @@
-package main
+package cli
 
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/mitchellh/mapstructure"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
@@ -65,13 +64,4 @@ func Start() error {
 	watcher.Start(ctx, runner)
 
 	return nil
-}
-
-func main() {
-	status := 0
-	if err := Cmd().Execute(); err != nil {
-		fmt.Println("failed running server")
-		status = 1
-	}
-	os.Exit(status)
 }

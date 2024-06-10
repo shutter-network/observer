@@ -1,5 +1,17 @@
 package main
 
-// we will start an http server
-// this will also spin a go routine which will listen on a ws connection
-// from an RPC url
+import (
+	"fmt"
+	"os"
+
+	"github.com/shutter-network/gnosh-metrics/cmd/cli"
+)
+
+func main() {
+	status := 0
+	if err := cli.Cmd().Execute(); err != nil {
+		fmt.Println("failed running server")
+		status = 1
+	}
+	os.Exit(status)
+}
