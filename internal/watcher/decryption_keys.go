@@ -17,19 +17,19 @@ import (
 type DecryptionKeysWatcher struct {
 	config                *common.Config
 	blocksChannel         chan *BlockReceivedEvent
-	decryptionDataChannel chan *DecryptionData
+	decryptionDataChannel chan *DecryptionKeysEvent
 
 	recentBlocksMux sync.Mutex
 	recentBlocks    map[uint64]*BlockReceivedEvent
 	mostRecentBlock uint64
 }
 
-type DecryptionData struct {
+type DecryptionKeysEvent struct {
 	Keys []*p2pmsg.Key
 	Slot uint64
 }
 
-func NewDecryptionKeysWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, decryptionDataChannel chan *DecryptionData) *DecryptionKeysWatcher {
+func NewDecryptionKeysWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, decryptionDataChannel chan *DecryptionKeysEvent) *DecryptionKeysWatcher {
 	return &DecryptionKeysWatcher{
 		config:                config,
 		blocksChannel:         blocksChannel,
@@ -67,7 +67,7 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(_ context.Context, msgUntyped p2
 	msg := msgUntyped.(*p2pmsg.DecryptionKeys)
 	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
 
-	dkw.decryptionDataChannel <- &DecryptionData{
+	dkw.decryptionDataChannel <- &DecryptionKeysEvent{
 		Keys: msg.Keys,
 		Slot: extra.Slot,
 	}

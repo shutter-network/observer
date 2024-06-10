@@ -6,15 +6,11 @@ import (
 )
 
 type TxMetrics interface {
-	AddEncryptedTx(identity string, encryptedTx []byte)
-	AddDecryptionData(identity string, dd *DecryptionData)
-	HasCompleteTx(identity string) bool
-	RemoveTx(identity string) bool
+	AddEncryptedTx(identityPreimage string, encryptedTx []byte)
+	AddDecryptionData(identityPreimage string, dd *DecryptionData)
+	HasCompleteTx(identityPreimage string) bool
+	RemoveTx(identityPreimage string) bool
 }
-
-var (
-	Metrics_ERR_UnableToDeleteTx = "unable to remove Tx which cant be decrypted"
-)
 
 type DecryptionData struct {
 	Key  []byte
@@ -26,10 +22,6 @@ type Tx struct {
 	DD          *DecryptionData
 }
 
-// TxMapper will hold encryption and decryption data
-// we dont need to store the encrypted transaction and if the transcation was included.
-// since we can compute these things on the fly when requested with data which
-// exists in the Mapper.
 type TxMapper struct {
 	Data  map[string]*Tx
 	mutex sync.Mutex
@@ -42,43 +34,43 @@ func NewTxMapper() *TxMapper {
 	}
 }
 
-func (tm *TxMapper) AddEncryptedTx(identity string, encryptedTx []byte) {
+func (tm *TxMapper) AddEncryptedTx(identityPreimage string, encryptedTx []byte) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tx, exists := tm.Data[identity]
+	tx, exists := tm.Data[identityPreimage]
 	if !exists {
 		tx = &Tx{}
-		tm.Data[identity] = tx
+		tm.Data[identityPreimage] = tx
 	}
 	tx.EncryptedTx = encryptedTx
 }
 
-func (tm *TxMapper) AddDecryptionData(identity string, dd *DecryptionData) {
+func (tm *TxMapper) AddDecryptionData(identityPreimage string, dd *DecryptionData) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tx, exists := tm.Data[identity]
+	tx, exists := tm.Data[identityPreimage]
 	if !exists {
 		tx = &Tx{}
-		tm.Data[identity] = tx
+		tm.Data[identityPreimage] = tx
 	}
 	tx.DD = dd
 }
 
-func (tm *TxMapper) CanBeDecrypted(identity string) bool {
-	tx, exists := tm.Data[identity]
+func (tm *TxMapper) CanBeDecrypted(identityPreimage string) bool {
+	tx, exists := tm.Data[identityPreimage]
 	if !exists {
 		return false
 	}
 	return len(tx.EncryptedTx) > 0 && tx.DD != nil
 }
 
-func (tm *TxMapper) RemoveTx(identity string) error {
-	if !tm.CanBeDecrypted(identity) {
-		return errors.New(Metrics_ERR_UnableToDeleteTx)
+func (tm *TxMapper) RemoveTx(identityPreimage string) error {
+	if !tm.CanBeDecrypted(identityPreimage) {
+		return errors.New("unable to remove Tx which cant be decrypted")
 	}
 
-	delete(tm.Data, identity)
+	delete(tm.Data, identityPreimage)
 	return nil
 }

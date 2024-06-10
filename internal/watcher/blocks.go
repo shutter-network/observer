@@ -44,7 +44,10 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 			case <-ctx.Done():
 				return err
 			case head := <-newHeads:
-				bw.logNewHead(head)
+				log.Info().
+					Int64("number", head.Number.Int64()).
+					Hex("hash", head.Hash().Bytes()).
+					Msg("new head")
 				ev := &BlockReceivedEvent{
 					Header: head,
 					Time:   time.Now(),
@@ -57,11 +60,4 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 	})
 
 	return nil
-}
-
-func (w *BlocksWatcher) logNewHead(head *types.Header) {
-	log.Info().
-		Int64("number", head.Number.Int64()).
-		Hex("hash", head.Hash().Bytes()).
-		Msg("new head")
 }

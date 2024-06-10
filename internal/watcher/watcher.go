@@ -25,7 +25,7 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	txMapper := metrics.NewTxMapper()
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
-	decryptionDataChannel := make(chan *DecryptionData)
+	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 
 	ethClient, err := ethclient.Dial(w.config.RpcURL)
 	if err != nil {
@@ -43,8 +43,8 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 		select {
 		//TODO: clean memory if !txMapper.CanBeDecrypted for more then 30 mins
 		case enTx := <-encryptedTxChannel:
-			txMapper.AddEncryptedTx(string(enTx.Identity.Marshal()), enTx.Tx)
-
+			identityPreimage := computeIdentityPreimage(enTx.IdentityPrefix[:], enTx.Sender)
+			txMapper.AddEncryptedTx(identityPreimage, enTx.Tx)
 			log.Info().
 				Bytes("encrypted transaction", enTx.Tx).
 				Msg("new encrypted transaction")

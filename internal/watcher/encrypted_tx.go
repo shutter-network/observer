@@ -21,9 +21,10 @@ type EncryptedTxWatcher struct {
 }
 
 type EncryptedTxReceivedEvent struct {
-	Identity *shcrypto.EpochID
-	Tx       []byte
-	Time     time.Time
+	IdentityPrefix [32]byte
+	Sender         common.Address
+	Tx             []byte
+	Time           time.Time
 }
 
 func NewEncryptedTxWatcher(config *metricsCommon.Config, encryptedTxChannel chan *EncryptedTxReceivedEvent, ethClient *ethclient.Client) *EncryptedTxWatcher {
@@ -57,11 +58,11 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner)
 			case <-ctx.Done():
 				return err
 			case event := <-txSubmittedEventChannel:
-				imageBytes := append(event.IdentityPrefix[:], event.Sender.Bytes()...)
 				ev := &EncryptedTxReceivedEvent{
-					Identity: shcrypto.ComputeEpochID(identitypreimage.IdentityPreimage(imageBytes).Bytes()),
-					Tx:       event.EncryptedTransaction,
-					Time:     time.Now(),
+					IdentityPrefix: event.IdentityPrefix,
+					Sender:         event.Sender,
+					Tx:             event.EncryptedTransaction,
+					Time:           time.Now(),
 				}
 				etw.encryptedTxChannel <- ev
 			case err := <-sub.Err():
@@ -70,4 +71,10 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner)
 		}
 	})
 	return nil
+}
+
+func computeIdentityPreimage(identityPrefix []byte, sender common.Address) string {
+	imageBytes := append(identityPrefix, sender.Bytes()...)
+	epochID := shcrypto.ComputeEpochID(identitypreimage.IdentityPreimage(imageBytes).Bytes())
+	return string(epochID.Marshal())
 }

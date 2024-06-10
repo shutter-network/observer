@@ -21,7 +21,7 @@ func Cmd() *cobra.Command {
 		Short: "Starts fetching recent encrypted transactions and their associated decryption keys",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var p2pKey *keys.Libp2pPrivate
-			if err := viper.UnmarshalKey("p2pKey", &p2pKey, viper.DecodeHook(mapstructure.TextUnmarshallerHookFunc())); err != nil {
+			if err := viper.UnmarshalKey("p2pkey", &p2pKey, viper.DecodeHook(mapstructure.TextUnmarshallerHookFunc())); err != nil {
 				fmt.Println("Error unmarshalling P2PKey:", err)
 				return err
 			}
@@ -54,7 +54,6 @@ func Cmd() *cobra.Command {
 }
 
 func Start() error {
-
 	// start watchers here
 	ctx := context.Background()
 

@@ -25,5 +25,5 @@ func (config *Config) BuildDefaultP2PConfig() {
 	}
 
 	config.P2P.Environment = env.EnvironmentLocal
-	config.P2P.DiscoveryNamespace = "shutter-42"
+	config.P2P.DiscoveryNamespace = "shutter-60"
 }
