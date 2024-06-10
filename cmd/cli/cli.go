@@ -61,7 +61,5 @@ func Start() error {
 	watcher := watcher.New(&config)
 
 	runner := runner.NewRunner(ctx)
-	watcher.Start(ctx, runner)
-
-	return nil
+	return watcher.Start(ctx, runner)
 }
