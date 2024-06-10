@@ -9,7 +9,6 @@ require (
 	github.com/shutter-network/shutter/shlib v0.1.19-0.20240520193152-f4f56ef19f9e
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.13.0
-	golang.org/x/sync v0.7.0
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -145,6 +144,7 @@ require (
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.20.0 // indirect

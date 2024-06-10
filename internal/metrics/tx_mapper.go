@@ -5,13 +5,6 @@ import (
 	"sync"
 )
 
-type TxMetrics interface {
-	AddEncryptedTx(identityPreimage string, encryptedTx []byte)
-	AddDecryptionData(identityPreimage string, dd *DecryptionData)
-	HasCompleteTx(identityPreimage string) bool
-	RemoveTx(identityPreimage string) bool
-}
-
 type DecryptionData struct {
 	Key  []byte
 	Slot uint64

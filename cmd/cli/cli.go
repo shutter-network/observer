@@ -6,9 +6,9 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/gnosh-metrics/internal/runner"
 	"github.com/shutter-network/gnosh-metrics/internal/watcher"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/encodeable/keys"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -59,6 +59,5 @@ func Start() error {
 
 	watcher := watcher.New(&config)
 
-	runner := runner.NewRunner(ctx)
-	return watcher.Start(ctx, runner)
+	return service.Run(ctx, watcher)
 }
