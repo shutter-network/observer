@@ -136,13 +136,14 @@ func (dkw *DecryptionKeysWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 }
 
 func (dkw *DecryptionKeysWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, bool) {
-	dkw.recentBlocksMux.Lock()
-	defer dkw.recentBlocksMux.Unlock()
-
 	slotTimestamp, err := getSlotTimestamp(slot)
 	if err != nil {
 		return nil, false
 	}
+
+	dkw.recentBlocksMux.Lock()
+	defer dkw.recentBlocksMux.Unlock()
+
 	if ev, ok := dkw.recentBlocks[dkw.mostRecentBlock]; ok {
 		if ev.Header.Time == slotTimestamp {
 			return ev, ok
