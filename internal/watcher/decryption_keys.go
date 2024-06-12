@@ -2,7 +2,6 @@ package watcher
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -164,8 +163,5 @@ func (dkw *DecryptionKeysWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedE
 }
 
 func getSlotTimestamp(slot uint64) (uint64, error) {
-	if slot == 0 {
-		return 0, errors.New("illegal slot not allowed")
-	}
 	return SLOT_1_TIMESTAMP + (slot-1)*GNOSIS_SLOT_DURATION, nil
 }
