@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -12,6 +13,11 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2p"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
+)
+
+const (
+	SLOT_1_TIMESTAMP     = 1665396305
+	GNOSIS_SLOT_DURATION = 5
 )
 
 type DecryptionKeysWatcher struct {
@@ -62,7 +68,7 @@ func (dkw *DecryptionKeysWatcher) ValidateMessage(_ context.Context, _ p2pmsg.Me
 	return pubsub.ValidationAccept, nil
 }
 
-func (dkw *DecryptionKeysWatcher) HandleMessage(_ context.Context, msgUntyped p2pmsg.Message) ([]p2pmsg.Message, error) {
+func (dkw *DecryptionKeysWatcher) HandleMessage(ctx context.Context, msgUntyped p2pmsg.Message) ([]p2pmsg.Message, error) {
 	t := time.Now()
 	msg := msgUntyped.(*p2pmsg.DecryptionKeys)
 	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
@@ -72,9 +78,9 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(_ context.Context, msgUntyped p2
 		Slot: extra.Slot,
 	}
 
-	ev, ok := dkw.getRecentBlock(extra.Slot)
+	ev, ok := dkw.getBlockFromSlot(extra.Slot)
 	if !ok {
-		log.Warn().
+		log.Info().
 			Uint64("keys-block", extra.Slot).
 			Uint64("most-recent-block", dkw.mostRecentBlock).
 			Msg("received keys for unknown block")
@@ -82,7 +88,7 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(_ context.Context, msgUntyped p2
 	}
 
 	dt := t.Sub(ev.Time)
-	log.Info().
+	log.Warn().
 		Uint64("block", extra.Slot).
 		Int("num-keys", len(msg.Keys)).
 		Str("latency", fmt.Sprintf("%.2fs", dt.Seconds())).
@@ -129,9 +135,36 @@ func (dkw *DecryptionKeysWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 	}
 }
 
-func (dkw *DecryptionKeysWatcher) getRecentBlock(blockNumber uint64) (*BlockReceivedEvent, bool) {
+func (dkw *DecryptionKeysWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, bool) {
 	dkw.recentBlocksMux.Lock()
 	defer dkw.recentBlocksMux.Unlock()
-	ev, ok := dkw.recentBlocks[blockNumber]
-	return ev, ok
+
+	slotTimestamp, err := getSlotTimestamp(slot)
+	if err != nil {
+		return nil, false
+	}
+	if ev, ok := dkw.recentBlocks[dkw.mostRecentBlock]; ok {
+		if ev.Header.Time == slotTimestamp {
+			return ev, ok
+		} else if ev.Header.Time < slotTimestamp {
+			return nil, false
+		}
+	}
+
+	for blockNumber := range dkw.recentBlocks {
+		if ev, ok := dkw.recentBlocks[blockNumber]; ok {
+			if ev.Header.Time == slotTimestamp {
+				return ev, ok
+			}
+		}
+	}
+
+	return nil, false
+}
+
+func getSlotTimestamp(slot uint64) (uint64, error) {
+	if slot == 0 {
+		return 0, errors.New("illegal slot not allowed")
+	}
+	return SLOT_1_TIMESTAMP + (slot-1)*GNOSIS_SLOT_DURATION, nil
 }
