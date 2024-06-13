@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	SLOT_1_TIMESTAMP     = 1665396305
+	SLOT_0_TIMESTAMP     = 1665396300
 	GNOSIS_SLOT_DURATION = 5
 )
 
@@ -80,18 +80,19 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(ctx context.Context, msgUntyped 
 	ev, ok := dkw.getBlockFromSlot(extra.Slot)
 	if !ok {
 		log.Info().
-			Uint64("keys-block", extra.Slot).
+			Uint64("slot", extra.Slot).
+			Int("num-keys", len(msg.Keys)).
 			Uint64("most-recent-block", dkw.mostRecentBlock).
-			Msg("received keys for unknown block")
+			Msg("received keys for future slot")
 		return []p2pmsg.Message{}, nil
 	}
 
 	dt := t.Sub(ev.Time)
 	log.Warn().
-		Uint64("block", extra.Slot).
+		Uint64("slot", extra.Slot).
 		Int("num-keys", len(msg.Keys)).
 		Str("latency", fmt.Sprintf("%.2fs", dt.Seconds())).
-		Msg("new keys")
+		Msg("received keys for a known slot")
 	return []p2pmsg.Message{}, nil
 }
 
@@ -159,5 +160,5 @@ func (dkw *DecryptionKeysWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedE
 }
 
 func getSlotTimestamp(slot uint64) uint64 {
-	return SLOT_1_TIMESTAMP + (slot-1)*GNOSIS_SLOT_DURATION
+	return SLOT_0_TIMESTAMP + (slot)*GNOSIS_SLOT_DURATION
 }
