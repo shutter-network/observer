@@ -1,4 +1,4 @@
-package repositories
+package data
 
 import (
 	"context"
@@ -15,6 +15,7 @@ type TransactionV1 struct {
 	DecryptionKey []byte    `db:"decryption_key"`
 	Slot          uint64    `db:"slot"`
 	CreatedAt     time.Time `db:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at"`
 }
 
 type TransactionRepo struct {
