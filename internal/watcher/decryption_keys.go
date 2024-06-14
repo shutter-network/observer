@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
@@ -79,10 +80,21 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(ctx context.Context, msgUntyped 
 
 	ev, ok := dkw.getBlockFromSlot(extra.Slot)
 	if !ok {
+		mostRecentBlock := dkw.recentBlocks[dkw.mostRecentBlock]
+		mostRecentSlot := getSlotForBlock(mostRecentBlock.Header)
+
+		if extra.Slot > mostRecentSlot+1 {
+			log.Warn().
+				Uint64("slot", extra.Slot).
+				Uint64("expected-slot", mostRecentSlot+1).
+				Uint64("most-recent-block", dkw.mostRecentBlock).
+				Msg("received keys for a slot greater then expected slot")
+		}
 		log.Info().
 			Uint64("slot", extra.Slot).
 			Int("num-keys", len(msg.Keys)).
 			Uint64("most-recent-block", dkw.mostRecentBlock).
+			Uint64("most-recent-slot", mostRecentSlot).
 			Msg("received keys for future slot")
 		return []p2pmsg.Message{}, nil
 	}
@@ -161,4 +173,8 @@ func (dkw *DecryptionKeysWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedE
 
 func getSlotTimestamp(slot uint64) uint64 {
 	return SLOT_0_TIMESTAMP + (slot)*GNOSIS_SLOT_DURATION
+}
+
+func getSlotForBlock(blockHeader *types.Header) uint64 {
+	return (blockHeader.Time - SLOT_0_TIMESTAMP) / GNOSIS_SLOT_DURATION
 }
