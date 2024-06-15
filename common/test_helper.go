@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -98,11 +99,17 @@ func createContainer(ctx context.Context) (testcontainers.Container, *pgx.Conn, 
 
 func runMigrations(ctx context.Context, dbAddr string) error {
 	// get location of test
-	_, path, _, ok := runtime.Caller(0)
-	if !ok {
-		return fmt.Errorf("failed to get path")
+	// Get the absolute path of the current file
+	_, b, _, _ := runtime.Caller(0)
+	basepath := filepath.Dir(b)
+	projectRoot := filepath.Join(basepath, "..")
+
+	projectRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return err
 	}
-	pathToMigrationFiles := filepath.Dir(path) + "/migrations"
+
+	pathToMigrationFiles := filepath.Join(projectRoot, "migrations")
 
 	databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", DbUser, DbPass, dbAddr, DbName)
 

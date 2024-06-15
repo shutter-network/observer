@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS transaction
     encrypted_tx        BYTEA,
     decryption_key      BYTEA,
     slot                BIGINT,
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
@@ -21,7 +21,7 @@ $$
                 decryption_key      BYTEA,
                 slot                BIGINT,
                 created_at          TIMESTAMP WITH TIME ZONE,
-                updated_at          TIMESTAMP WITH TIME ZONE,
+                updated_at          TIMESTAMP WITH TIME ZONE
             );
         END IF;
     END
