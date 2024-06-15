@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,7 +26,7 @@ type TestDatabase struct {
 	container  testcontainers.Container
 }
 
-func SetupTestDatabase() *TestDatabase {
+func SetupTestDatabase(migrationsPath string) *TestDatabase {
 	// setup db container
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	container, dbInstance, dbAddr, err := createContainer(ctx)
@@ -37,7 +35,7 @@ func SetupTestDatabase() *TestDatabase {
 	}
 
 	// migrate db schema
-	err = runMigrations(ctx, dbAddr)
+	err = runMigrations(ctx, dbAddr, migrationsPath)
 	if err != nil {
 		log.Fatal("failed to perform db migration", err)
 	}
@@ -97,19 +95,7 @@ func createContainer(ctx context.Context) (testcontainers.Container, *pgx.Conn, 
 	return container, db, dbAddr, nil
 }
 
-func runMigrations(ctx context.Context, dbAddr string) error {
-	// get location of test
-	// Get the absolute path of the current file
-	_, b, _, _ := runtime.Caller(0)
-	basepath := filepath.Dir(b)
-	projectRoot := filepath.Join(basepath, "..")
-
-	projectRoot, err := filepath.Abs(projectRoot)
-	if err != nil {
-		return err
-	}
-
-	pathToMigrationFiles := filepath.Join(projectRoot, "migrations")
+func runMigrations(ctx context.Context, dbAddr string, migrationsPath string) error {
 
 	databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", DbUser, DbPass, dbAddr, DbName)
 
@@ -119,5 +105,5 @@ func runMigrations(ctx context.Context, dbAddr string) error {
 		return err
 	}
 
-	return goose.RunContext(ctx, "up", migrationConn, pathToMigrationFiles)
+	return goose.RunContext(ctx, "up", migrationConn, migrationsPath)
 }

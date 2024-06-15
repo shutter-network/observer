@@ -18,17 +18,17 @@ type TransactionV1 struct {
 	UpdatedAt     time.Time `db:"updated_at"`
 }
 
-type transactionRepo struct {
+type TransactionRepo struct {
 	*database.TxManager
 }
 
-func NewTransactionRepository(db database.DB) *transactionRepo {
-	return &transactionRepo{
+func NewTransactionRepository(db database.DB) *TransactionRepo {
+	return &TransactionRepo{
 		database.NewTxManager(db),
 	}
 }
 
-func (tr *transactionRepo) CreateTransaction(ctx context.Context, txs []*TransactionV1) ([]*TransactionV1, error) {
+func (tr *TransactionRepo) CreateTransaction(ctx context.Context, txs []*TransactionV1) ([]*TransactionV1, error) {
 	rows, err := tr.GetDB(ctx).Query(ctx, `
 		INSERT INTO transaction 
 			(encrypted_tx, 
@@ -60,7 +60,7 @@ func (tr *transactionRepo) CreateTransaction(ctx context.Context, txs []*Transac
 	return txs, nil
 }
 
-func (tr *transactionRepo) CreateTransaction2(ctx context.Context, tx *TransactionV1) (*TransactionV1, error) {
+func (tr *TransactionRepo) CreateTransaction2(ctx context.Context, tx *TransactionV1) (*TransactionV1, error) {
 	rows, err := tr.GetDB(ctx).Query(ctx, `INSERT into transaction (encrypted_tx, decryption_key) VALUES ($1, $2) RETURNING id`, tx.EncryptedTx, tx.DecryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert transactions in DB: %w", err)

@@ -1,15 +1,14 @@
-package metrics
+package tests
 
 import (
-	"bytes"
 	"math/big"
 	"math/rand"
-	"testing"
 
 	cryptorand "crypto/rand"
 
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
 	"gotest.tools/assert"
 )
@@ -25,8 +24,8 @@ var (
 	g2Comparer = gocmp.Comparer(equalG2)
 )
 
-func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *shcrypto.EpochID) {
-	t.Helper()
+func (s *TestMetricsSuite) makeKeys() (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *shcrypto.EpochID) {
+	s.T().Helper()
 	g2 := bls12381.NewG2()
 	n := 3
 	threshold := uint64(2)
@@ -36,7 +35,7 @@ func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *
 	gammas := []*shcrypto.Gammas{}
 	for i := 0; i < n; i++ {
 		p, err := shcrypto.RandomPolynomial(cryptorand.Reader, threshold-1)
-		assert.NilError(t, err)
+		assert.NilError(s.T(), err)
 		ps = append(ps, p)
 		gammas = append(gammas, p.Gammas())
 	}
@@ -57,79 +56,76 @@ func makeKeys(t *testing.T) (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *
 		epochSecretKeyShares = append(epochSecretKeyShares, shcrypto.ComputeEpochSecretKeyShare(eonSecretKeyShares[i], epochID))
 	}
 	eonPublicKey := shcrypto.ComputeEonPublicKey(gammas)
-	assert.DeepEqual(t, g2.MulScalar(new(bls12381.PointG2), g2.One(), eonSecretKey), (*bls12381.PointG2)(eonPublicKey), g2Comparer)
+	assert.DeepEqual(s.T(), g2.MulScalar(new(bls12381.PointG2), g2.One(), eonSecretKey), (*bls12381.PointG2)(eonPublicKey), g2Comparer)
 	epochSecretKey, err := shcrypto.ComputeEpochSecretKey(
 		[]int{0, 1},
 		[]*shcrypto.EpochSecretKeyShare{epochSecretKeyShares[0], epochSecretKeyShares[1]},
 		threshold)
-	assert.NilError(t, err)
+	assert.NilError(s.T(), err)
 	return eonPublicKey, epochSecretKey, epochID
 }
 
-func TestAddTxWhenEncryptionTxReceivedFirst(t *testing.T) {
-	txMapper := NewTxMapper()
-
-	eonPublicKey, decryptionKey, identity := makeKeys(t)
+func (s *TestMetricsSuite) TestAddTxWhenEncryptionTxReceivedFirst() {
+	eonPublicKey, decryptionKey, identity := s.makeKeys()
 
 	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
-	assert.NilError(t, err)
+	s.Require().NoError(err)
 	encryptedTransaction := shcrypto.Encrypt(tx, eonPublicKey, identity, sigma)
 
 	encrypedTxBytes := encryptedTransaction.Marshal()
 
-	txMapper.AddEncryptedTx(string(identity.Marshal()), encrypedTxBytes)
+	s.txMapper.AddEncryptedTx(string(identity.Marshal()), encrypedTxBytes)
 
-	_, ok := txMapper.Data[string(identity.Marshal())]
+	_, ok := s.txMapper.Data[string(identity.Marshal())]
 
-	assert.Assert(t, ok)
+	s.Require().True(ok)
 
-	hasComplete := txMapper.CanBeDecrypted(string(identity.Marshal()))
-	assert.Assert(t, !hasComplete)
+	hasComplete := s.txMapper.CanBeDecrypted(string(identity.Marshal()))
+	s.Require().False(hasComplete)
 
 	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
-	assert.NilError(t, err)
+	s.Require().NoError(err)
 
-	assert.Assert(t, bytes.Equal(tx, decryptedMessage))
+	s.Require().Equal(tx, decryptedMessage)
 
-	txMapper.AddDecryptionData(string(identity.Marshal()), &DecryptionData{
+	s.txMapper.AddDecryptionData(string(identity.Marshal()), &metrics.DecryptionData{
 		Key:  decryptionKey.Marshal(),
 		Slot: rand.Uint64(),
 	})
 
-	hasComplete = txMapper.CanBeDecrypted(string(identity.Marshal()))
-	assert.Assert(t, hasComplete)
+	hasComplete = s.txMapper.CanBeDecrypted(string(identity.Marshal()))
+	s.Require().True(hasComplete)
 }
 
-func TestAddTxWhenDecryptionKeysReceivedFirst(t *testing.T) {
-	txMapper := NewTxMapper()
+func (s *TestMetricsSuite) TestAddTxWhenDecryptionKeysReceivedFirst() {
+	eonPublicKey, decryptionKey, identity := s.makeKeys()
 
-	eonPublicKey, decryptionKey, identity := makeKeys(t)
-
-	txMapper.AddDecryptionData(string(identity.Marshal()), &DecryptionData{
+	s.txMapper.AddDecryptionData(string(identity.Marshal()), &metrics.DecryptionData{
 		Key:  decryptionKey.Marshal(),
 		Slot: rand.Uint64(),
 	})
 
-	_, ok := txMapper.Data[string(identity.Marshal())]
+	_, ok := s.txMapper.Data[string(identity.Marshal())]
 
-	assert.Assert(t, ok)
+	s.Require().True(ok)
 
-	hasComplete := txMapper.CanBeDecrypted(string(identity.Marshal()))
-	assert.Assert(t, !hasComplete)
+	hasComplete := s.txMapper.CanBeDecrypted(string(identity.Marshal()))
+	s.Require().False(hasComplete)
 
 	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
-	assert.NilError(t, err)
+	s.Require().NoError(err)
+
 	encryptedTransaction := shcrypto.Encrypt(tx, eonPublicKey, identity, sigma)
 
 	encrypedTxBytes := encryptedTransaction.Marshal()
 
-	txMapper.AddEncryptedTx(string(identity.Marshal()), encrypedTxBytes)
+	s.txMapper.AddEncryptedTx(string(identity.Marshal()), encrypedTxBytes)
 
 	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
-	assert.NilError(t, err)
+	s.Require().NoError(err)
 
-	assert.Assert(t, bytes.Equal(tx, decryptedMessage))
+	s.Require().Equal(tx, decryptedMessage)
 
-	hasComplete = txMapper.CanBeDecrypted(string(identity.Marshal()))
-	assert.Assert(t, hasComplete)
+	hasComplete = s.txMapper.CanBeDecrypted(string(identity.Marshal()))
+	s.Require().True(hasComplete)
 }
