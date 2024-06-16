@@ -10,6 +10,13 @@ import (
 	"github.com/shutter-network/gnosh-metrics/common"
 )
 
+type SortDirection string
+
+const (
+	DESC SortDirection = "DESC"
+	ASC  SortDirection = "ASC"
+)
+
 func NewDB(ctx context.Context, config *common.DBConfig) (*pgx.Conn, error) {
 	dataSourceName := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable password=%s",
 		config.Host,

@@ -55,7 +55,6 @@ func (tdb *TestDatabase) TearDown(ctx context.Context) {
 }
 
 func createContainer(ctx context.Context) (testcontainers.Container, *pgx.Conn, string, error) {
-
 	var env = map[string]string{
 		"POSTGRES_PASSWORD": DbPass,
 		"POSTGRES_USER":     DbUser,
@@ -96,7 +95,6 @@ func createContainer(ctx context.Context) (testcontainers.Container, *pgx.Conn, 
 }
 
 func runMigrations(ctx context.Context, dbAddr string, migrationsPath string) error {
-
 	databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", DbUser, DbPass, dbAddr, DbName)
 
 	migrationConn, err := sql.Open("pgx", databaseURL)
