@@ -18,11 +18,12 @@ const (
 )
 
 func NewDB(ctx context.Context, config *common.DBConfig) (*pgx.Conn, error) {
-	dataSourceName := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable password=%s",
+	dataSourceName := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%t password=%s",
 		config.Host,
 		config.Port,
 		config.User,
 		config.Dbname,
+		config.SSLMode,
 		config.Password,
 	)
 	dbpool, err := pgx.Connect(ctx, dataSourceName)
