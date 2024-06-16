@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/shutter-network/gnosh-metrics/common/database"
 )
 
@@ -28,45 +27,24 @@ func NewTransactionRepository(db database.DB) *TransactionRepo {
 	}
 }
 
-func (tr *TransactionRepo) CreateTransaction(ctx context.Context, txs []*TransactionV1) ([]*TransactionV1, error) {
-	rows, err := tr.GetDB(ctx).Query(ctx, `
-		INSERT INTO transaction 
+func (tr *TransactionRepo) CreateTransaction(ctx context.Context, tx *TransactionV1) (*TransactionV1, error) {
+	rows := tr.GetDB(ctx).QueryRow(ctx,
+		`INSERT into transaction 
 			(encrypted_tx, 
-			decryption_key, 
-			slot)
-		SELECT 
-			t.encrypted_tx,
-			t.decryption_key,
-			t.slot
-		FROM UNNEST(@Transactions::transaction_v1[]) t
+			decryption_key,
+			slot) 
+		VALUES 
+			($1, $2, $3) 
 		RETURNING
 			id,
 			encrypted_tx,
 			decryption_key,
 			slot,
-			created_at`,
-		pgx.NamedArgs{"Transactions": txs})
+			created_at`, tx.EncryptedTx, tx.DecryptionKey, tx.Slot)
 
+	err := rows.Scan(&tx.ID, &tx.EncryptedTx, &tx.DecryptionKey, &tx.Slot, &tx.CreatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to insert transactions in DB: %w", err)
+		return nil, fmt.Errorf("failed to collect transaction from insert result : %w", err)
 	}
-
-	defer rows.Close()
-
-	txs, err = pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[TransactionV1])
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect transactions from insert result: %w", err)
-	}
-	return txs, nil
-}
-
-func (tr *TransactionRepo) CreateTransaction2(ctx context.Context, tx *TransactionV1) (*TransactionV1, error) {
-	rows, err := tr.GetDB(ctx).Query(ctx, `INSERT into transaction (encrypted_tx, decryption_key) VALUES ($1, $2) RETURNING id`, tx.EncryptedTx, tx.DecryptionKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to insert transactions in DB: %w", err)
-	}
-
-	rows.Scan(&tx.ID)
-
 	return tx, nil
 }
