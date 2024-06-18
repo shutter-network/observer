@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
@@ -21,7 +21,7 @@ const (
 )
 
 type TestDatabase struct {
-	DbInstance *pgx.Conn
+	DbInstance *pgxpool.Pool
 	DbAddress  string
 	container  testcontainers.Container
 }
@@ -48,13 +48,13 @@ func SetupTestDatabase(migrationsPath string) *TestDatabase {
 	}
 }
 
-func (tdb *TestDatabase) TearDown(ctx context.Context) {
-	tdb.DbInstance.Close(ctx)
+func (tdb *TestDatabase) TearDown() {
+	tdb.DbInstance.Close()
 	// remove test container
 	_ = tdb.container.Terminate(context.Background())
 }
 
-func createContainer(ctx context.Context) (testcontainers.Container, *pgx.Conn, string, error) {
+func createContainer(ctx context.Context) (testcontainers.Container, *pgxpool.Pool, string, error) {
 	var env = map[string]string{
 		"POSTGRES_PASSWORD": DbPass,
 		"POSTGRES_USER":     DbUser,
@@ -86,7 +86,7 @@ func createContainer(ctx context.Context) (testcontainers.Container, *pgx.Conn, 
 	time.Sleep(time.Second)
 
 	dbAddr := fmt.Sprintf("localhost:%s", p.Port())
-	db, err := pgx.Connect(ctx, fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", DbUser, DbPass, dbAddr, DbName))
+	db, err := pgxpool.New(ctx, fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", DbUser, DbPass, dbAddr, DbName))
 	if err != nil {
 		return container, db, dbAddr, fmt.Errorf("failed to establish database connection: %v", err)
 	}

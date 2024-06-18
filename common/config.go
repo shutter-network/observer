@@ -10,6 +10,7 @@ type Config struct {
 	RpcURL          string
 	ContractAddress string
 	P2P             *p2p.Config
+	NoDB            bool
 }
 
 type DBConfig struct {
@@ -17,8 +18,8 @@ type DBConfig struct {
 	Port     string
 	User     string
 	Password string
-	Dbname   string
-	SSLMode  bool
+	DbName   string
+	SSLMode  string
 }
 
 func (config *Config) BuildDefaultP2PConfig() {
