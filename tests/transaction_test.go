@@ -130,6 +130,42 @@ func (s *TestMetricsSuite) TestAddDecryptionData() {
 	s.Require().Equal(tx[0].IdentityPreimage, identityPreimage)
 }
 
+func (s *TestMetricsSuite) TestAddFullTransaction() {
+	slot := rand.Int63()
+	ectx, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	dk, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	blockHash, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	identityPreimage, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+
+	err = s.txMapperDB.AddEncryptedTx(identityPreimage, ectx)
+	s.Require().NoError(err)
+
+	err = s.txMapperDB.AddDecryptionData(identityPreimage, &metrics.DecryptionData{
+		Key:  dk,
+		Slot: uint64(slot),
+	})
+	s.Require().NoError(err)
+
+	err = s.txMapperDB.AddBlockHash(uint64(slot), blockHash)
+	s.Require().NoError(err)
+
+	tx, err := s.transactionRepo.QueryTransactions(context.Background(), &data.QueryTransaction{
+		IdentityPreimages: [][]byte{identityPreimage},
+	})
+	s.Require().NoError(err)
+
+	s.Require().Equal(len(tx), 1)
+	s.Require().Equal(tx[0].EncryptedTx, ectx)
+	s.Require().Equal(tx[0].DecryptionKey, dk)
+	s.Require().Equal(tx[0].Slot, slot)
+	s.Require().Equal(tx[0].BlockHash, blockHash)
+	s.Require().Equal(tx[0].IdentityPreimage, identityPreimage)
+}
+
 func generateRandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)
 	_, err := cryptoRand.Read(b)
