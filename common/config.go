@@ -12,6 +12,15 @@ type Config struct {
 	P2P             *p2p.Config
 }
 
+type DBConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Dbname   string
+	SSLMode  bool
+}
+
 func (config *Config) BuildDefaultP2PConfig() {
 	config.P2P = &p2p.Config{}
 	config.P2P.CustomBootstrapAddresses = []*address.P2PAddress{address.MustP2PAddress("/dns4/207.154.243.191/tcp/23000/p2p/12D3KooWPjX9v7FWmPvAUSTMpG7j2jXWxNnUxyDZrXPqmK29QNEd")}

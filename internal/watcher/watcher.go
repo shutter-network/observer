@@ -21,7 +21,6 @@ func New(config *common.Config) *Watcher {
 }
 
 func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
-
 	txMapper := metrics.NewTxMapper()
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
