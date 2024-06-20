@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -41,6 +42,16 @@ func (tm *TxMapper) AddDecryptionData(identityPreimage []byte, dd *DecryptionDat
 	}
 	tx.DD = dd
 	return nil
+}
+
+func (tm *TxMapper) AddBlockHash(slot uint64, blockHash []byte) error {
+	for _, val := range tm.Data {
+		if val.DD.Slot == slot {
+			val.BlockHash = blockHash
+			return nil
+		}
+	}
+	return fmt.Errorf("transaction for the given slot: %d was not found", slot)
 }
 
 func (tm *TxMapper) CanBeDecrypted(identityPreimage []byte) (bool, error) {
