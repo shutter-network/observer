@@ -43,6 +43,16 @@ func (tm *TxMapper) AddDecryptionData(identityPreimage []byte, dd *DecryptionDat
 	return nil
 }
 
+func (tm *TxMapper) AddBlockHash(slot uint64, blockHash []byte) error {
+	for _, val := range tm.Data {
+		if val.DD.Slot == slot {
+			val.BlockHash = blockHash
+			return nil
+		}
+	}
+	return nil
+}
+
 func (tm *TxMapper) CanBeDecrypted(identityPreimage []byte) (bool, error) {
 	tx, exists := tm.Data[string(identityPreimage)]
 	if !exists {

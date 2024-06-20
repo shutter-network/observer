@@ -52,6 +52,14 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	}
 	for {
 		select {
+
+		case block := <-blocksChannel:
+			slot := getSlotForBlock(block.Header)
+			err := txMapper.AddBlockHash(slot, block.Header.Hash().Bytes())
+			if err != nil {
+				log.Err(err).Msg("err adding block hash")
+				return err
+			}
 		case enTx := <-encryptedTxChannel:
 			identityPreimage := computeIdentityPreimage(enTx.IdentityPrefix[:], enTx.Sender)
 			err := txMapper.AddEncryptedTx(identityPreimage, enTx.Tx)

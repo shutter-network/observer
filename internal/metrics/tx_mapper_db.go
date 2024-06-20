@@ -74,6 +74,27 @@ func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionD
 	return err
 }
 
+func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
+	err := tm.txManager.InTx(context.Background(), func(ctx context.Context) error {
+		transactions, err := tm.transactionRepo.QueryTransactions(ctx, &data.QueryTransaction{
+			Slots:  []int64{int64(slot)},
+			DoLock: true,
+		})
+
+		if err != nil {
+			return fmt.Errorf("error querying transaction: %w", err)
+		}
+
+		if len(transactions) == 0 {
+			return nil
+		}
+		transactions[0].BlockHash = blockHash
+		_, err = tm.transactionRepo.UpdateTransaction(ctx, transactions[0])
+		return err
+	})
+	return err
+}
+
 func (tm *TxMapperDB) CanBeDecrypted(identityPreimage []byte) (bool, error) {
 	transactions, err := tm.transactionRepo.QueryTransactions(context.Background(), &data.QueryTransaction{
 		IdentityPreimages: [][]byte{identityPreimage},
