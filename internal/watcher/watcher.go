@@ -42,9 +42,8 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
-	decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel, decryptionDataChannel)
-	KeyShareWatcher := NewKeyShareWatcher(w.config, keyShareChannel)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher, KeyShareWatcher); err != nil {
+	decryptionKeysWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel)
+	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher); err != nil {
 		return err
 	}
 

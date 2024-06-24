@@ -86,7 +86,7 @@ func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
 		}
 
 		if len(transactions) == 0 {
-			return fmt.Errorf("transaction for the given slot: %d was not found", slot)
+			return nil
 		}
 		transactions[0].BlockHash = blockHash
 		_, err = tm.transactionRepo.UpdateTransaction(ctx, transactions[0])

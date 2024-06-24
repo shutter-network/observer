@@ -3,76 +3,17 @@ package watcher
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/rs/zerolog/log"
-	"github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
-	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2p"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
-const (
-	SLOT_0_TIMESTAMP     = 1665396300
-	GNOSIS_SLOT_DURATION = 5
-)
-
-type DecryptionKeysWatcher struct {
-	config                *common.Config
-	blocksChannel         chan *BlockReceivedEvent
-	decryptionDataChannel chan *DecryptionKeysEvent
-
-	recentBlocksMux sync.Mutex
-	recentBlocks    map[uint64]*BlockReceivedEvent
-	mostRecentBlock uint64
-}
-
-type DecryptionKeysEvent struct {
-	Keys []*p2pmsg.Key
-	Slot uint64
-}
-
-func NewDecryptionKeysWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, decryptionDataChannel chan *DecryptionKeysEvent) *DecryptionKeysWatcher {
-	return &DecryptionKeysWatcher{
-		config:                config,
-		blocksChannel:         blocksChannel,
-		decryptionDataChannel: decryptionDataChannel,
-		recentBlocksMux:       sync.Mutex{},
-		recentBlocks:          make(map[uint64]*BlockReceivedEvent),
-		mostRecentBlock:       0,
-	}
-}
-
-func (dkw *DecryptionKeysWatcher) Start(ctx context.Context, runner service.Runner) error {
-	p2pService, err := p2p.New(dkw.config.P2P)
-	if err != nil {
-		return err
-	}
-	p2pService.AddMessageHandler(dkw)
-
-	runner.Go(func() error { return dkw.insertBlocks(ctx) })
-
-	return runner.StartService(p2pService)
-}
-
-func (dkw *DecryptionKeysWatcher) MessagePrototypes() []p2pmsg.Message {
-	return []p2pmsg.Message{
-		&p2pmsg.DecryptionKeys{},
-	}
-}
-
-func (dkw *DecryptionKeysWatcher) ValidateMessage(_ context.Context, _ p2pmsg.Message) (pubsub.ValidationResult, error) {
-	return pubsub.ValidationAccept, nil
-}
-
-func (dkw *DecryptionKeysWatcher) HandleMessage(ctx context.Context, msgUntyped p2pmsg.Message) ([]p2pmsg.Message, error) {
+func (dkw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([]p2pmsg.Message, error) {
 	t := time.Now()
-	msg := msgUntyped.(*p2pmsg.DecryptionKeys)
-	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
 
+	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
 	dkw.decryptionDataChannel <- &DecryptionKeysEvent{
 		Keys: msg.Keys,
 		Slot: extra.Slot,
@@ -108,7 +49,7 @@ func (dkw *DecryptionKeysWatcher) HandleMessage(ctx context.Context, msgUntyped 
 	return []p2pmsg.Message{}, nil
 }
 
-func (dkw *DecryptionKeysWatcher) insertBlocks(ctx context.Context) error {
+func (dkw *P2PMsgsWatcher) insertBlocks(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -123,7 +64,7 @@ func (dkw *DecryptionKeysWatcher) insertBlocks(ctx context.Context) error {
 	}
 }
 
-func (dkw *DecryptionKeysWatcher) insertBlock(ev *BlockReceivedEvent) {
+func (dkw *P2PMsgsWatcher) insertBlock(ev *BlockReceivedEvent) {
 	dkw.recentBlocksMux.Lock()
 	defer dkw.recentBlocksMux.Unlock()
 	dkw.recentBlocks[ev.Header.Number.Uint64()] = ev
@@ -132,7 +73,7 @@ func (dkw *DecryptionKeysWatcher) insertBlock(ev *BlockReceivedEvent) {
 	}
 }
 
-func (dkw *DecryptionKeysWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
+func (dkw *P2PMsgsWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 	dkw.recentBlocksMux.Lock()
 	defer dkw.recentBlocksMux.Unlock()
 
@@ -147,7 +88,7 @@ func (dkw *DecryptionKeysWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 	}
 }
 
-func (dkw *DecryptionKeysWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, bool) {
+func (dkw *P2PMsgsWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, bool) {
 	dkw.recentBlocksMux.Lock()
 	defer dkw.recentBlocksMux.Unlock()
 

@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 )
 
@@ -51,7 +50,7 @@ func (tm *TxMapper) AddBlockHash(slot uint64, blockHash []byte) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("transaction for the given slot: %d was not found", slot)
+	return nil
 }
 
 func (tm *TxMapper) CanBeDecrypted(identityPreimage []byte) (bool, error) {
