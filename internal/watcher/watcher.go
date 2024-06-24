@@ -33,6 +33,7 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
+	keyShareChannel := make(chan *KeyShareEvent)
 
 	ethClient, err := ethclient.Dial(w.config.RpcURL)
 	if err != nil {
@@ -42,7 +43,8 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
 	decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel, decryptionDataChannel)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher); err != nil {
+	KeyShareWatcher := NewKeyShareWatcher(w.config, keyShareChannel)
+	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher, KeyShareWatcher); err != nil {
 		return err
 	}
 
