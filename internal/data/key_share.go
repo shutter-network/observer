@@ -79,7 +79,7 @@ func (ksr *KeyShareRepo) QueryKeyShares(ctx context.Context, query *QueryKeyShar
 	queryArgs := pgx.NamedArgs{}
 
 	if len(query.KeyShares) > 0 {
-		conditions = append(conditions, `ks.key=ANY(@KeyShares)`)
+		conditions = append(conditions, `ks.key_share=ANY(@KeyShares)`)
 		queryArgs["KeyShares"] = query.KeyShares
 	}
 

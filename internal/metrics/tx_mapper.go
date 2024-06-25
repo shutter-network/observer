@@ -43,6 +43,19 @@ func (tm *TxMapper) AddDecryptionData(identityPreimage []byte, dd *DecryptionDat
 	return nil
 }
 
+func (tm *TxMapper) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	tx, exists := tm.Data[string(identityPreimage)]
+	if !exists {
+		tx = &Tx{}
+		tm.Data[string(identityPreimage)] = tx
+	}
+	tx.KS = ks
+	return nil
+}
+
 func (tm *TxMapper) AddBlockHash(slot uint64, blockHash []byte) error {
 	for _, val := range tm.Data {
 		if val.DD.Slot == slot {

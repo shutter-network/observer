@@ -132,7 +132,8 @@ func getTxMapperImpl(config *common.Config) (metrics.ITxMapper, error) {
 		txManager := database.NewTxManager(db)
 		encryptedTxRepo := data.NewEncryptedTxRepository(db)
 		decryptionDataRepo := data.NewDecryptionDataRepository(db)
-		txMapper = metrics.NewTxMapperDB(encryptedTxRepo, decryptionDataRepo, txManager)
+		keyShareRepo := data.NewKeyShareRepository(db)
+		txMapper = metrics.NewTxMapperDB(encryptedTxRepo, decryptionDataRepo, keyShareRepo, txManager)
 	}
 	return txMapper, nil
 }

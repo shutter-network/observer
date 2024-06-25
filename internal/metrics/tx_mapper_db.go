@@ -11,17 +11,20 @@ import (
 type TxMapperDB struct {
 	encryptedTxRepo   *data.EncryptedTxRepo
 	decrytionDataRepo *data.DecryptionDataRepo
+	keyShareRepo      *data.KeyShareRepo
 	txManager         *database.TxManager
 }
 
 func NewTxMapperDB(
 	etr *data.EncryptedTxRepo,
 	ddr *data.DecryptionDataRepo,
+	ksr *data.KeyShareRepo,
 	txManager *database.TxManager,
 ) ITxMapper {
 	return &TxMapperDB{
 		encryptedTxRepo:   etr,
 		decrytionDataRepo: ddr,
+		keyShareRepo:      ksr,
 		txManager:         txManager,
 	}
 }
@@ -38,6 +41,15 @@ func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionD
 	_, err := tm.decrytionDataRepo.CreateDecryptionData(context.Background(), &data.DecryptionDataV1{
 		Key:              dd.Key,
 		Slot:             int64(dd.Slot),
+		IdentityPreimage: identityPreimage,
+	})
+	return err
+}
+
+func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
+	_, err := tm.keyShareRepo.CreateKeyShare(context.Background(), &data.KeyShareV1{
+		KeyShare:         ks.Share,
+		Slot:             int64(ks.Slot),
 		IdentityPreimage: identityPreimage,
 	})
 	return err
