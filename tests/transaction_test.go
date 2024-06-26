@@ -118,11 +118,38 @@ func (s *TestMetricsSuite) TestAddDecryptionData() {
 	s.Require().Equal(dd[0].IdentityPreimage, identityPreimage)
 }
 
+func (s *TestMetricsSuite) TestAddKeyShare() {
+	slot := rand.Int63()
+	ks, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+
+	identityPreimage, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+
+	err = s.txMapperDB.AddKeyShare(identityPreimage, &metrics.KeyShare{
+		Share: ks,
+		Slot:  uint64(slot),
+	})
+	s.Require().NoError(err)
+
+	k, err := s.keyShareRepo.QueryKeyShares(context.Background(), &data.QueryKeyShares{
+		IdentityPreimages: [][]byte{identityPreimage},
+	})
+	s.Require().NoError(err)
+
+	s.Require().Equal(len(k), 1)
+	s.Require().Equal(k[0].KeyShare, ks)
+	s.Require().Equal(k[0].Slot, slot)
+	s.Require().Equal(k[0].IdentityPreimage, identityPreimage)
+}
+
 func (s *TestMetricsSuite) TestAddFullTransaction() {
 	slot := rand.Int63()
 	ectx, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 	dk, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	ks, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 	blockHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
@@ -130,6 +157,12 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 	s.Require().NoError(err)
 
 	err = s.txMapperDB.AddEncryptedTx(identityPreimage, ectx)
+	s.Require().NoError(err)
+
+	err = s.txMapperDB.AddKeyShare(identityPreimage, &metrics.KeyShare{
+		Share: ks,
+		Slot:  uint64(slot),
+	})
 	s.Require().NoError(err)
 
 	err = s.txMapperDB.AddDecryptionData(identityPreimage, &metrics.DecryptionData{

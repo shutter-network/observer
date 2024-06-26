@@ -87,6 +87,21 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 					Uint64("slot", dd.Slot).
 					Msg("new decryption key")
 			}
+		case ks := <-keyShareChannel:
+			for _, share := range ks.Shares {
+				err := txMapper.AddKeyShare(share.EpochID, &metrics.KeyShare{
+					Share: share.Share,
+					Slot:  ks.Slot,
+				})
+				if err != nil {
+					log.Err(err).Msg("err adding key shares")
+					return err
+				}
+				log.Info().
+					Bytes("key shares", share.Share).
+					Uint64("slot", ks.Slot).
+					Msg("new key shares")
+			}
 		}
 	}
 }
