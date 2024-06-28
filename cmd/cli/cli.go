@@ -3,8 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog/log"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/watcher"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/encodeable/keys"
@@ -64,6 +67,17 @@ func Start() error {
 	// start watchers here
 	ctx := context.Background()
 
+	go runPromMetrics(&config)
 	watcher := watcher.New(&config)
 	return service.Run(ctx, watcher)
+}
+
+func runPromMetrics(config *metricsCommon.Config) {
+	if !config.NoDB {
+		http.Handle("/metrics", promhttp.Handler())
+		log.Info().Msg("Starting metrics server at :3000")
+		if err := http.ListenAndServe(":3000", nil); err != nil {
+			log.Err(err).Msg("error starting server at port 2112")
+		}
+	}
 }
