@@ -34,7 +34,11 @@ func (tm *TxMapperDB) AddEncryptedTx(identityPreimage []byte, encryptedTx []byte
 		Tx:               encryptedTx,
 		IdentityPreimage: identityPreimage,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	metricsEncTxReceived.Inc()
+	return nil
 }
 
 func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionData) error {
@@ -43,7 +47,11 @@ func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionD
 		Slot:             int64(dd.Slot),
 		IdentityPreimage: identityPreimage,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	metricsDecKeyReceived.Inc()
+	return nil
 }
 
 func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
@@ -52,7 +60,11 @@ func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
 		Slot:             int64(ks.Slot),
 		IdentityPreimage: identityPreimage,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	metricsKeyShareReceived.Inc()
+	return nil
 }
 
 func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
@@ -71,7 +83,11 @@ func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
 	}
 	decryptionData[0].BlockHash = blockHash
 	_, err = tm.decrytionDataRepo.UpdateDecryptionData(ctx, decryptionData[0])
-	return err
+	if err != nil {
+		return err
+	}
+	metricsShutterTxIncludedInBlock.Inc()
+	return nil
 }
 
 func (tm *TxMapperDB) CanBeDecrypted(identityPreimage []byte) (bool, error) {

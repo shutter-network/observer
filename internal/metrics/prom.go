@@ -6,32 +6,29 @@ import (
 )
 
 var (
-	encTxGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "encrypted_tx_value",
-		Help: "Encypted transactions fetched from sequencer event",
+	metricsEncTxReceived = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "encrypted_tx_received_total",
+		Help: "Total Encypted transactions fetched from sequencer event",
 	})
-	decKeyGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "decryption_keys_value",
-		Help: "Decryption key fetched from p2p",
+	metricsDecKeyReceived = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "decryption_keys_received_total",
+		Help: "Total Decryption key fetched from p2p",
 	})
-	keyShareGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "key_share_value",
-		Help: "Key share fetched from p2p",
+	metricsKeyShareReceived = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "key_share_received_total",
+		Help: "Total Key share fetched from p2p",
+	})
+	metricsShutterTxIncludedInBlock = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "shutter_tx_included_in_block_total",
+		Help: "Total shutterized txs included in the block",
 	})
 )
 
-func init() {
-	prometheus.MustRegister(encTxGauge, decKeyGauge, keyShareGauge)
-}
-
-func SetEncTxMetrics(value float64) {
-	encTxGauge.Set(value)
-}
-
-func SetDecKeyMetrics(value float64) {
-	decKeyGauge.Set(value)
-}
-
-func SetKeyShareMetrics(value float64) {
-	keyShareGauge.Set(value)
+func EnableMetrics() {
+	prometheus.MustRegister(
+		metricsEncTxReceived,
+		metricsDecKeyReceived,
+		metricsKeyShareReceived,
+		metricsShutterTxIncludedInBlock,
+	)
 }

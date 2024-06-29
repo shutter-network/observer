@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/gnosh-metrics/internal/watcher"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/encodeable/keys"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
@@ -74,6 +75,8 @@ func Start() error {
 
 func runPromMetrics(config *metricsCommon.Config) {
 	if !config.NoDB {
+		metrics.EnableMetrics()
+
 		http.Handle("/metrics", promhttp.Handler())
 		log.Info().Msg("Starting metrics server at :3000")
 		if err := http.ListenAndServe(":3000", nil); err != nil {
