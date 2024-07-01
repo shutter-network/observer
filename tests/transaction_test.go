@@ -5,6 +5,7 @@ import (
 	cryptoRand "crypto/rand"
 	"math/rand"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 )
@@ -171,7 +172,7 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 	})
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddBlockHash(uint64(slot), blockHash)
+	err = s.txMapperDB.AddBlockHash(uint64(slot), common.Hash(blockHash))
 	s.Require().NoError(err)
 }
 

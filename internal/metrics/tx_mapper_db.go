@@ -20,7 +20,7 @@ func NewTxMapperDB(
 	ddr *data.DecryptionDataRepo,
 	ksr *data.KeyShareRepo,
 	txManager *database.TxManager,
-) ITxMapper {
+) TxMapper {
 	return &TxMapperDB{
 		encryptedTxRepo:   etr,
 		decrytionDataRepo: ddr,
