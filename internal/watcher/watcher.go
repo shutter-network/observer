@@ -21,19 +21,19 @@ import (
 
 const (
 	//chiado network
-	CHIADO_CHAIN_ID          = 10200
-	CHIADO_GENESIS_TIMESTAMP = 1665396300
-	CHIADO_SLOT_DURATION     = 5
+	ChiadoChainID          = 10200
+	ChiadoGenesisTimestamp = 1665396300
+	ChiadoSlotDuration     = 5
 
 	//mainnet network
-	GNOSIS_MAINNET_CHAIN_ID          = 100
-	GNOSIS_MAINNET_GENESIS_TIMESTAMP = 1638993340
-	GNOSIS_MAINNET_SLOT_DURATION     = 5
+	GnosisMainnetChainID          = 100
+	GnosisMainnetGenesisTimestamp = 1638993340
+	GnosisMainnetSlotDuration     = 5
 )
 
 var (
-	GENESIS_TIMESTAMP = 0
-	SLOT_DURATION     = 0
+	GenesisTimestamp = 0
+	SlotDuration     = 0
 )
 
 type Watcher struct {
@@ -177,22 +177,19 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 }
 
 func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
-	if GENESIS_TIMESTAMP > 0 && SLOT_DURATION > 0 {
-		return nil
-	}
 	chainID, err := ethClient.ChainID(ctx)
 	if err != nil {
 		return err
 	}
 
 	switch chainID.Int64() {
-	case CHIADO_CHAIN_ID:
-		GENESIS_TIMESTAMP = CHIADO_GENESIS_TIMESTAMP
-		SLOT_DURATION = CHIADO_SLOT_DURATION
+	case ChiadoChainID:
+		GenesisTimestamp = ChiadoGenesisTimestamp
+		SlotDuration = ChiadoSlotDuration
 		return nil
-	case GNOSIS_MAINNET_CHAIN_ID:
-		GENESIS_TIMESTAMP = GNOSIS_MAINNET_GENESIS_TIMESTAMP
-		SLOT_DURATION = GNOSIS_MAINNET_SLOT_DURATION
+	case GnosisMainnetChainID:
+		GenesisTimestamp = GnosisMainnetGenesisTimestamp
+		SlotDuration = GnosisMainnetSlotDuration
 		return nil
 	default:
 		return errors.New("encountered unsupported chain id")

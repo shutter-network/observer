@@ -113,9 +113,9 @@ func (dkw *P2PMsgsWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, b
 }
 
 func getSlotTimestamp(slot uint64) uint64 {
-	return uint64(GENESIS_TIMESTAMP) + (slot)*uint64(SLOT_DURATION)
+	return uint64(GenesisTimestamp) + (slot)*uint64(SlotDuration)
 }
 
 func getSlotForBlock(blockHeader *types.Header) uint64 {
-	return (blockHeader.Time - uint64(GENESIS_TIMESTAMP)) / uint64(SLOT_DURATION)
+	return (blockHeader.Time - uint64(GenesisTimestamp)) / uint64(SlotDuration)
 }
