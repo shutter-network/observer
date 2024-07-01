@@ -46,6 +46,13 @@ func Cmd() *cobra.Command {
 		"sequencer contract address",
 	)
 
+	cmd.PersistentFlags().BoolVar(
+		&config.NoDB,
+		"no-db",
+		false,
+		"use memory storage instead of database",
+	)
+
 	cmd.PersistentFlags().String("p2pkey", "", "P2P key value (base64 encoded)")
 	viper.BindPFlag("p2pkey", cmd.PersistentFlags().Lookup("p2pkey"))
 
@@ -58,6 +65,5 @@ func Start() error {
 	ctx := context.Background()
 
 	watcher := watcher.New(&config)
-
 	return service.Run(ctx, watcher)
 }

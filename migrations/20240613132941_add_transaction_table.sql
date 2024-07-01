@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS transaction
     decryption_key      BYTEA,
     slot                BIGINT,
     block_hash          BYTEA,
+    identity_preimage   BYTEA UNIQUE                           NOT NULL,
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
@@ -15,6 +16,4 @@ CREATE TABLE IF NOT EXISTS transaction
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE transaction;
-
-DROP TYPE transaction_v1;
 -- +goose StatementEnd

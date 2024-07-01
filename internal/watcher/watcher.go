@@ -2,10 +2,18 @@ package watcher
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"path"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/common/database"
+	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
@@ -21,7 +29,6 @@ func New(config *common.Config) *Watcher {
 }
 
 func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
-	txMapper := metrics.NewTxMapper()
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
@@ -38,22 +45,41 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 		return err
 	}
 
+	txMapper, err := getTxMapperImpl(w.config)
+	if err != nil {
+		return err
+	}
 	for {
 		select {
-		//TODO: clean memory if !txMapper.CanBeDecrypted for more then 30 mins
+
+		case block := <-blocksChannel:
+			slot := getSlotForBlock(block.Header)
+			err := txMapper.AddBlockHash(slot, block.Header.Hash())
+			if err != nil {
+				log.Err(err).Msg("err adding block hash")
+				return err
+			}
 		case enTx := <-encryptedTxChannel:
 			identityPreimage := computeIdentityPreimage(enTx.IdentityPrefix[:], enTx.Sender)
-			txMapper.AddEncryptedTx(identityPreimage, enTx.Tx)
+			err := txMapper.AddEncryptedTx(identityPreimage, enTx.Tx)
+			if err != nil {
+				log.Err(err).Msg("err adding encrypting transaction")
+				return err
+			}
 			log.Info().
 				Bytes("encrypted transaction", enTx.Tx).
 				Msg("new encrypted transaction")
 
 		case dd := <-decryptionDataChannel:
 			for _, key := range dd.Keys {
-				txMapper.AddDecryptionData(string(key.Identity), &metrics.DecryptionData{
+				err := txMapper.AddDecryptionData(key.Identity, &metrics.DecryptionData{
 					Key:  key.Key,
 					Slot: dd.Slot,
 				})
+				if err != nil {
+					log.Err(err).Msg("err adding decryption data")
+					return err
+				}
 				log.Info().
 					Bytes("decryption keys", key.Key).
 					Uint64("slot", dd.Slot).
@@ -61,4 +87,52 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 			}
 		}
 	}
+}
+
+func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
+	var txMapper metrics.TxMapper
+
+	if config.NoDB {
+		txMapper = metrics.NewTxMapper()
+	} else {
+		ctx := context.Background()
+		var (
+			host     = os.Getenv("DB_HOST")
+			port     = os.Getenv("DB_PORT")
+			user     = os.Getenv("DB_USER")
+			password = os.Getenv("DB_PASSWORD")
+			dbName   = os.Getenv("DB_NAME")
+			sslMode  = os.Getenv("DB_SSL_MODE")
+		)
+		dbAddr := fmt.Sprintf("%s:%s", host, port)
+		if sslMode == "" {
+			sslMode = "disable"
+		}
+		databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s", user, password, dbAddr, dbName, sslMode)
+
+		dbConfig := common.DBConfig{
+			DatabaseURL: databaseURL,
+		}
+		db, err := database.NewDB(ctx, &dbConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		migrationConn, err := sql.Open("pgx", databaseURL)
+		if err != nil {
+			return nil, err
+		}
+		_, curFile, _, _ := runtime.Caller(0)
+		curDir := path.Dir(curFile)
+
+		migrationsPath := curDir + "/../../migrations"
+		err = goose.RunContext(ctx, "up", migrationConn, migrationsPath)
+		if err != nil {
+			return nil, err
+		}
+		txManager := database.NewTxManager(db)
+		transactionRepo := data.NewTransactionRepository(db)
+		txMapper = metrics.NewTxMapperDB(transactionRepo, txManager)
+	}
+	return txMapper, nil
 }

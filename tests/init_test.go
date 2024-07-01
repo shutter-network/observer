@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"context"
 	"path"
 	"runtime"
 	"testing"
@@ -20,6 +19,7 @@ type TestMetricsSuite struct {
 	txManager *database.TxManager
 
 	txMapper        metrics.TxMapper
+	txMapperDB      metrics.TxMapper
 	transactionRepo *data.TransactionRepo
 }
 
@@ -28,9 +28,7 @@ func TestMain(t *testing.T) {
 }
 
 func (s *TestMetricsSuite) TearDownAllSuite() {
-	ctx := context.Background()
-
-	s.testDB.TearDown(ctx)
+	s.testDB.TearDown()
 }
 
 func (s *TestMetricsSuite) SetupSuite() {
@@ -42,8 +40,10 @@ func (s *TestMetricsSuite) SetupSuite() {
 
 	s.txManager = database.NewTxManager(s.testDB.DbInstance)
 	s.transactionRepo = data.NewTransactionRepository(s.testDB.DbInstance)
+
+	s.txMapperDB = metrics.NewTxMapperDB(s.transactionRepo, s.txManager)
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {
-	s.txMapper = *metrics.NewTxMapper()
+	s.txMapper = metrics.NewTxMapper()
 }

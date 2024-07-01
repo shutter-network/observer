@@ -73,8 +73,8 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner)
 	return nil
 }
 
-func computeIdentityPreimage(identityPrefix []byte, sender common.Address) string {
+func computeIdentityPreimage(identityPrefix []byte, sender common.Address) []byte {
 	imageBytes := append(identityPrefix, sender.Bytes()...)
 	epochID := shcrypto.ComputeEpochID(identitypreimage.IdentityPreimage(imageBytes).Bytes())
-	return string(epochID.Marshal())
+	return epochID.Marshal()
 }
