@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -18,6 +19,23 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
+const (
+	//chiado network
+	CHIADO_CHAIN_ID          = 10200
+	CHIADO_GENESIS_TIMESTAMP = 1665396300
+	CHIADO_SLOT_DURATION     = 5
+
+	//mainnet network
+	GNOSIS_MAINNET_CHAIN_ID          = 100
+	GNOSIS_MAINNET_GENESIS_TIMESTAMP = 1638993340
+	GNOSIS_MAINNET_SLOT_DURATION     = 5
+)
+
+var (
+	GENESIS_TIMESTAMP = 0
+	SLOT_DURATION     = 0
+)
+
 type Watcher struct {
 	config *common.Config
 }
@@ -28,7 +46,7 @@ func New(config *common.Config) *Watcher {
 	}
 }
 
-func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
+func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
@@ -39,6 +57,10 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 		return err
 	}
 
+	err = setNetworkConfig(ctx, ethClient)
+	if err != nil {
+		return err
+	}
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
 	decryptionKeysWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel)
@@ -125,7 +147,6 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 			sslMode = "disable"
 		}
 		databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s", user, password, dbAddr, dbName, sslMode)
-
 		dbConfig := common.DBConfig{
 			DatabaseURL: databaseURL,
 		}
@@ -153,4 +174,27 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 		txMapper = metrics.NewTxMapperDB(encryptedTxRepo, decryptionDataRepo, keyShareRepo, txManager)
 	}
 	return txMapper, nil
+}
+
+func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
+	if GENESIS_TIMESTAMP > 0 && SLOT_DURATION > 0 {
+		return nil
+	}
+	chainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return err
+	}
+
+	switch chainID.Int64() {
+	case CHIADO_CHAIN_ID:
+		GENESIS_TIMESTAMP = CHIADO_GENESIS_TIMESTAMP
+		SLOT_DURATION = CHIADO_SLOT_DURATION
+		return nil
+	case GNOSIS_MAINNET_CHAIN_ID:
+		GENESIS_TIMESTAMP = GNOSIS_MAINNET_GENESIS_TIMESTAMP
+		SLOT_DURATION = GNOSIS_MAINNET_SLOT_DURATION
+		return nil
+	default:
+		return errors.New("encountered unsupported chain id")
+	}
 }
