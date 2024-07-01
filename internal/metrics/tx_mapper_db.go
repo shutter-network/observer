@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
@@ -55,7 +56,7 @@ func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
 	return err
 }
 
-func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
+func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash common.Hash) error {
 	ctx := context.Background()
 	decryptionData, err := tm.decrytionDataRepo.QueryDecryptionData(ctx, &data.QueryDecryptionData{
 		Slots:  []int64{int64(slot)},
@@ -69,7 +70,7 @@ func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
 	if len(decryptionData) == 0 {
 		return nil
 	}
-	decryptionData[0].BlockHash = blockHash
+	decryptionData[0].BlockHash = blockHash.Bytes()
 	_, err = tm.decrytionDataRepo.UpdateDecryptionData(ctx, decryptionData[0])
 	return err
 }
