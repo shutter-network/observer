@@ -18,8 +18,8 @@ type TestMetricsSuite struct {
 	testDB    *common.TestDatabase
 	txManager *database.TxManager
 
-	txMapper        metrics.ITxMapper
-	txMapperDB      metrics.ITxMapper
+	txMapper        metrics.TxMapper
+	txMapperDB      metrics.TxMapper
 	transactionRepo *data.TransactionRepo
 }
 

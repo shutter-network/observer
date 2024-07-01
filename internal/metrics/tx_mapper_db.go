@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
@@ -16,7 +17,7 @@ type TxMapperDB struct {
 func NewTxMapperDB(
 	tr *data.TransactionRepo,
 	txManager *database.TxManager,
-) ITxMapper {
+) TxMapper {
 	return &TxMapperDB{
 		transactionRepo: tr,
 		txManager:       txManager,
@@ -74,7 +75,7 @@ func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionD
 	return err
 }
 
-func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
+func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash common.Hash) error {
 	err := tm.txManager.InTx(context.Background(), func(ctx context.Context) error {
 		transactions, err := tm.transactionRepo.QueryTransactions(ctx, &data.QueryTransaction{
 			Slots:  []int64{int64(slot)},
@@ -88,7 +89,7 @@ func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash []byte) error {
 		if len(transactions) == 0 {
 			return nil
 		}
-		transactions[0].BlockHash = blockHash
+		transactions[0].BlockHash = blockHash.Bytes()
 		_, err = tm.transactionRepo.UpdateTransaction(ctx, transactions[0])
 		return err
 	})
