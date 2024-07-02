@@ -14,12 +14,12 @@ type Config struct {
 }
 
 type DBConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	DbName   string
-	SSLMode  string
+	DatabaseURL string
+}
+
+type MetricsServerConfig struct {
+	Host string
+	Port uint16
 }
 
 func (config *Config) BuildDefaultP2PConfig() {

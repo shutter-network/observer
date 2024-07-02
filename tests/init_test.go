@@ -18,8 +18,8 @@ type TestMetricsSuite struct {
 	testDB    *common.TestDatabase
 	txManager *database.TxManager
 
-	txMapper           metrics.ITxMapper
-	txMapperDB         metrics.ITxMapper
+	txMapper           metrics.TxMapper
+	txMapperDB         metrics.TxMapper
 	encryptedTxRepo    *data.EncryptedTxRepo
 	decryptionDataRepo *data.DecryptionDataRepo
 	keyShareRepo       *data.KeyShareRepo
@@ -49,5 +49,5 @@ func (s *TestMetricsSuite) SetupSuite() {
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {
-	s.txMapper = metrics.NewTxMapper()
+	s.txMapper = metrics.NewTxMapperMemory()
 }

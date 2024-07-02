@@ -3,13 +3,13 @@ package watcher
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
@@ -17,6 +17,23 @@ import (
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
+)
+
+const (
+	//chiado network
+	ChiadoChainID          = 10200
+	ChiadoGenesisTimestamp = 1665396300
+	ChiadoSlotDuration     = 5
+
+	//mainnet network
+	GnosisMainnetChainID          = 100
+	GnosisMainnetGenesisTimestamp = 1638993340
+	GnosisMainnetSlotDuration     = 5
+)
+
+var (
+	GenesisTimestamp = 0
+	SlotDuration     = 0
 )
 
 type Watcher struct {
@@ -29,7 +46,7 @@ func New(config *common.Config) *Watcher {
 	}
 }
 
-func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
+func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
@@ -40,6 +57,10 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 		return err
 	}
 
+	err = setNetworkConfig(ctx, ethClient)
+	if err != nil {
+		return err
+	}
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
 	decryptionKeysWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel)
@@ -56,7 +77,7 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 
 		case block := <-blocksChannel:
 			slot := getSlotForBlock(block.Header)
-			err := txMapper.AddBlockHash(slot, block.Header.Hash().Bytes())
+			err := txMapper.AddBlockHash(slot, block.Header.Hash())
 			if err != nil {
 				log.Err(err).Msg("err adding block hash")
 				return err
@@ -106,31 +127,33 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 	}
 }
 
-func getTxMapperImpl(config *common.Config) (metrics.ITxMapper, error) {
-	var txMapper metrics.ITxMapper
+func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
+	var txMapper metrics.TxMapper
 
 	if config.NoDB {
-		txMapper = metrics.NewTxMapper()
+		txMapper = metrics.NewTxMapperMemory()
 	} else {
-		err := godotenv.Load(".envrc")
-		if err != nil {
-			return nil, fmt.Errorf("error loading .envrc file: %w", err)
-		}
 		ctx := context.Background()
-		dbConf := &common.DBConfig{
-			Host:     os.Getenv("DB_HOST"),
-			Port:     os.Getenv("DB_PORT"),
-			User:     os.Getenv("DB_USER"),
-			Password: os.Getenv("DB_PASSWORD"),
-			DbName:   os.Getenv("DB_NAME"),
-			SSLMode:  os.Getenv("DB_SSL_MODE"),
+		var (
+			host     = os.Getenv("DB_HOST")
+			port     = os.Getenv("DB_PORT")
+			user     = os.Getenv("DB_USER")
+			password = os.Getenv("DB_PASSWORD")
+			dbName   = os.Getenv("DB_NAME")
+			sslMode  = os.Getenv("DB_SSL_MODE")
+		)
+		dbAddr := fmt.Sprintf("%s:%s", host, port)
+		if sslMode == "" {
+			sslMode = "disable"
 		}
-		db, err := database.NewDB(ctx, dbConf)
+		databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s", user, password, dbAddr, dbName, sslMode)
+		dbConfig := common.DBConfig{
+			DatabaseURL: databaseURL,
+		}
+		db, err := database.NewDB(ctx, &dbConfig)
 		if err != nil {
 			return nil, err
 		}
-		dbAddr := fmt.Sprintf("%s:%s", dbConf.Host, dbConf.Port)
-		databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", dbConf.User, dbConf.Password, dbAddr, dbConf.DbName)
 
 		migrationConn, err := sql.Open("pgx", databaseURL)
 		if err != nil {
@@ -151,4 +174,24 @@ func getTxMapperImpl(config *common.Config) (metrics.ITxMapper, error) {
 		txMapper = metrics.NewTxMapperDB(encryptedTxRepo, decryptionDataRepo, keyShareRepo, txManager)
 	}
 	return txMapper, nil
+}
+
+func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
+	chainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return err
+	}
+
+	switch chainID.Int64() {
+	case ChiadoChainID:
+		GenesisTimestamp = ChiadoGenesisTimestamp
+		SlotDuration = ChiadoSlotDuration
+		return nil
+	case GnosisMainnetChainID:
+		GenesisTimestamp = GnosisMainnetGenesisTimestamp
+		SlotDuration = GnosisMainnetSlotDuration
+		return nil
+	default:
+		return errors.New("encountered unsupported chain id")
+	}
 }

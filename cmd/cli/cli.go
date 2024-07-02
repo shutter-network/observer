@@ -3,11 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog/log"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/gnosh-metrics/internal/watcher"
@@ -65,22 +62,19 @@ func Cmd() *cobra.Command {
 }
 
 func Start() error {
-	// start watchers here
+	// start services here
 	ctx := context.Background()
 
-	go runPromMetrics(&config)
 	watcher := watcher.New(&config)
-	return service.Run(ctx, watcher)
-}
-
-func runPromMetrics(config *metricsCommon.Config) {
+	services := []service.Service{watcher}
 	if !config.NoDB {
 		metrics.EnableMetrics()
-
-		http.Handle("/metrics", promhttp.Handler())
-		log.Info().Msg("Starting metrics server at :3000")
-		if err := http.ListenAndServe(":3000", nil); err != nil {
-			log.Err(err).Msg("error starting server at port 2112")
-		}
+		//TODO: make a decision to add host and port via cli args for metrics
+		metricsServer := metrics.NewMetricsServer(&metricsCommon.MetricsServerConfig{
+			Host: "localhost",
+			Port: 8080,
+		})
+		services = append(services, metricsServer)
 	}
+	return service.Run(ctx, services...)
 }

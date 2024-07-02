@@ -11,11 +11,6 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
-const (
-	SLOT_0_TIMESTAMP     = 1665396300
-	GNOSIS_SLOT_DURATION = 5
-)
-
 type P2PMsgsWatcher struct {
 	config                *common.Config
 	blocksChannel         chan *BlockReceivedEvent
