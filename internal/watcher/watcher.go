@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -18,6 +19,23 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
+const (
+	//chiado network
+	ChiadoChainID          = 10200
+	ChiadoGenesisTimestamp = 1665396300
+	ChiadoSlotDuration     = 5
+
+	//mainnet network
+	GnosisMainnetChainID          = 100
+	GnosisMainnetGenesisTimestamp = 1638993340
+	GnosisMainnetSlotDuration     = 5
+)
+
+var (
+	GenesisTimestamp = 0
+	SlotDuration     = 0
+)
+
 type Watcher struct {
 	config *common.Config
 }
@@ -28,19 +46,24 @@ func New(config *common.Config) *Watcher {
 	}
 }
 
-func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
+func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	encryptedTxChannel := make(chan *EncryptedTxReceivedEvent)
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
+	keyShareChannel := make(chan *KeyShareEvent)
 
 	ethClient, err := ethclient.Dial(w.config.RpcURL)
 	if err != nil {
 		return err
 	}
 
+	err = setNetworkConfig(ctx, ethClient)
+	if err != nil {
+		return err
+	}
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, encryptedTxChannel, ethClient)
-	decryptionKeysWatcher := NewDecryptionKeysWatcher(w.config, blocksChannel, decryptionDataChannel)
+	decryptionKeysWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel)
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher); err != nil {
 		return err
 	}
@@ -85,6 +108,21 @@ func (w *Watcher) Start(_ context.Context, runner service.Runner) error {
 					Uint64("slot", dd.Slot).
 					Msg("new decryption key")
 			}
+		case ks := <-keyShareChannel:
+			for _, share := range ks.Shares {
+				err := txMapper.AddKeyShare(share.EpochID, &metrics.KeyShare{
+					Share: share.Share,
+					Slot:  ks.Slot,
+				})
+				if err != nil {
+					log.Err(err).Msg("err adding key shares")
+					return err
+				}
+				log.Info().
+					Bytes("key shares", share.Share).
+					Uint64("slot", ks.Slot).
+					Msg("new key shares")
+			}
 		}
 	}
 }
@@ -93,7 +131,7 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 	var txMapper metrics.TxMapper
 
 	if config.NoDB {
-		txMapper = metrics.NewTxMapper()
+		txMapper = metrics.NewTxMapperMemory()
 	} else {
 		ctx := context.Background()
 		var (
@@ -109,7 +147,6 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 			sslMode = "disable"
 		}
 		databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s", user, password, dbAddr, dbName, sslMode)
-
 		dbConfig := common.DBConfig{
 			DatabaseURL: databaseURL,
 		}
@@ -131,8 +168,30 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 			return nil, err
 		}
 		txManager := database.NewTxManager(db)
-		transactionRepo := data.NewTransactionRepository(db)
-		txMapper = metrics.NewTxMapperDB(transactionRepo, txManager)
+		encryptedTxRepo := data.NewEncryptedTxRepository(db)
+		decryptionDataRepo := data.NewDecryptionDataRepository(db)
+		keyShareRepo := data.NewKeyShareRepository(db)
+		txMapper = metrics.NewTxMapperDB(encryptedTxRepo, decryptionDataRepo, keyShareRepo, txManager)
 	}
 	return txMapper, nil
+}
+
+func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
+	chainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return err
+	}
+
+	switch chainID.Int64() {
+	case ChiadoChainID:
+		GenesisTimestamp = ChiadoGenesisTimestamp
+		SlotDuration = ChiadoSlotDuration
+		return nil
+	case GnosisMainnetChainID:
+		GenesisTimestamp = GnosisMainnetGenesisTimestamp
+		SlotDuration = GnosisMainnetSlotDuration
+		return nil
+	default:
+		return errors.New("encountered unsupported chain id")
+	}
 }

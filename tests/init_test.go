@@ -18,9 +18,11 @@ type TestMetricsSuite struct {
 	testDB    *common.TestDatabase
 	txManager *database.TxManager
 
-	txMapper        metrics.TxMapper
-	txMapperDB      metrics.TxMapper
-	transactionRepo *data.TransactionRepo
+	txMapper           metrics.TxMapper
+	txMapperDB         metrics.TxMapper
+	encryptedTxRepo    *data.EncryptedTxRepo
+	decryptionDataRepo *data.DecryptionDataRepo
+	keyShareRepo       *data.KeyShareRepo
 }
 
 func TestMain(t *testing.T) {
@@ -39,11 +41,13 @@ func (s *TestMetricsSuite) SetupSuite() {
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
 	s.txManager = database.NewTxManager(s.testDB.DbInstance)
-	s.transactionRepo = data.NewTransactionRepository(s.testDB.DbInstance)
+	s.encryptedTxRepo = data.NewEncryptedTxRepository(s.testDB.DbInstance)
+	s.decryptionDataRepo = data.NewDecryptionDataRepository(s.testDB.DbInstance)
+	s.keyShareRepo = data.NewKeyShareRepository(s.testDB.DbInstance)
 
-	s.txMapperDB = metrics.NewTxMapperDB(s.transactionRepo, s.txManager)
+	s.txMapperDB = metrics.NewTxMapperDB(s.encryptedTxRepo, s.decryptionDataRepo, s.keyShareRepo, s.txManager)
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {
-	s.txMapper = metrics.NewTxMapper()
+	s.txMapper = metrics.NewTxMapperMemory()
 }

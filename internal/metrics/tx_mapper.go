@@ -13,7 +13,7 @@ type TxMapperMemory struct {
 	mutex sync.Mutex
 }
 
-func NewTxMapper() TxMapper {
+func NewTxMapperMemory() TxMapper {
 	return &TxMapperMemory{
 		Data:  make(map[string]*Tx),
 		mutex: sync.Mutex{},
@@ -43,6 +43,19 @@ func (tm *TxMapperMemory) AddDecryptionData(identityPreimage []byte, dd *Decrypt
 		tm.Data[hex.EncodeToString(identityPreimage)] = tx
 	}
 	tx.DD = dd
+	return nil
+}
+
+func (tm *TxMapperMemory) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	tx, exists := tm.Data[hex.EncodeToString(identityPreimage)]
+	if !exists {
+		tx = &Tx{}
+		tm.Data[hex.EncodeToString(identityPreimage)] = tx
+	}
+	tx.KS = ks
 	return nil
 }
 

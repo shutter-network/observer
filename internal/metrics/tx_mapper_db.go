@@ -10,101 +10,87 @@ import (
 )
 
 type TxMapperDB struct {
-	transactionRepo *data.TransactionRepo
-	txManager       *database.TxManager
+	encryptedTxRepo   *data.EncryptedTxRepo
+	decrytionDataRepo *data.DecryptionDataRepo
+	keyShareRepo      *data.KeyShareRepo
+	txManager         *database.TxManager
 }
 
 func NewTxMapperDB(
-	tr *data.TransactionRepo,
+	etr *data.EncryptedTxRepo,
+	ddr *data.DecryptionDataRepo,
+	ksr *data.KeyShareRepo,
 	txManager *database.TxManager,
 ) TxMapper {
 	return &TxMapperDB{
-		transactionRepo: tr,
-		txManager:       txManager,
+		encryptedTxRepo:   etr,
+		decrytionDataRepo: ddr,
+		keyShareRepo:      ksr,
+		txManager:         txManager,
 	}
 }
 
 func (tm *TxMapperDB) AddEncryptedTx(identityPreimage []byte, encryptedTx []byte) error {
-	err := tm.txManager.InTx(context.Background(), func(ctx context.Context) error {
-		transactions, err := tm.transactionRepo.QueryTransactions(ctx, &data.QueryTransaction{
-			IdentityPreimages: [][]byte{identityPreimage},
-			DoLock:            true,
-		})
-		if err != nil {
-			return fmt.Errorf("error querying transaction: %w", err)
-		}
-
-		if len(transactions) == 0 {
-			_, err = tm.transactionRepo.CreateTransaction(ctx, &data.TransactionV1{
-				EncryptedTx:      encryptedTx,
-				IdentityPreimage: identityPreimage,
-			})
-			return err
-		}
-		transactions[0].EncryptedTx = encryptedTx
-		_, err = tm.transactionRepo.UpdateTransaction(ctx, transactions[0])
-		return err
+	_, err := tm.encryptedTxRepo.CreateEncryptedTx(context.Background(), &data.EncryptedTxV1{
+		Tx:               encryptedTx,
+		IdentityPreimage: identityPreimage,
 	})
 	return err
 }
 
 func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionData) error {
-	err := tm.txManager.InTx(context.Background(), func(ctx context.Context) error {
-		transactions, err := tm.transactionRepo.QueryTransactions(ctx, &data.QueryTransaction{
-			IdentityPreimages: [][]byte{identityPreimage},
-			DoLock:            true,
-		})
+	_, err := tm.decrytionDataRepo.CreateDecryptionData(context.Background(), &data.DecryptionDataV1{
+		Key:              dd.Key,
+		Slot:             int64(dd.Slot),
+		IdentityPreimage: identityPreimage,
+	})
+	return err
+}
 
-		if err != nil {
-			return fmt.Errorf("error querying transaction: %w", err)
-		}
-
-		if len(transactions) == 0 {
-			_, err := tm.transactionRepo.CreateTransaction(ctx, &data.TransactionV1{
-				DecryptionKey:    dd.Key,
-				Slot:             int64(dd.Slot),
-				IdentityPreimage: identityPreimage,
-			})
-			return err
-		}
-		transactions[0].DecryptionKey = dd.Key
-		transactions[0].Slot = int64(dd.Slot)
-		_, err = tm.transactionRepo.UpdateTransaction(ctx, transactions[0])
-		return err
+func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
+	_, err := tm.keyShareRepo.CreateKeyShare(context.Background(), &data.KeyShareV1{
+		KeyShare:         ks.Share,
+		Slot:             int64(ks.Slot),
+		IdentityPreimage: identityPreimage,
 	})
 	return err
 }
 
 func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash common.Hash) error {
-	err := tm.txManager.InTx(context.Background(), func(ctx context.Context) error {
-		transactions, err := tm.transactionRepo.QueryTransactions(ctx, &data.QueryTransaction{
-			Slots:  []int64{int64(slot)},
-			DoLock: true,
-		})
-
-		if err != nil {
-			return fmt.Errorf("error querying transaction: %w", err)
-		}
-
-		if len(transactions) == 0 {
-			return nil
-		}
-		transactions[0].BlockHash = blockHash.Bytes()
-		_, err = tm.transactionRepo.UpdateTransaction(ctx, transactions[0])
-		return err
+	ctx := context.Background()
+	decryptionData, err := tm.decrytionDataRepo.QueryDecryptionData(ctx, &data.QueryDecryptionData{
+		Slots:  []int64{int64(slot)},
+		DoLock: true,
 	})
+
+	if err != nil {
+		return fmt.Errorf("error querying decryption data: %w", err)
+	}
+
+	if len(decryptionData) == 0 {
+		return nil
+	}
+	decryptionData[0].BlockHash = blockHash.Bytes()
+	_, err = tm.decrytionDataRepo.UpdateDecryptionData(ctx, decryptionData[0])
 	return err
 }
 
 func (tm *TxMapperDB) CanBeDecrypted(identityPreimage []byte) (bool, error) {
-	transactions, err := tm.transactionRepo.QueryTransactions(context.Background(), &data.QueryTransaction{
+	encryptedTx, err := tm.encryptedTxRepo.QueryEncryptedTx(context.Background(), &data.QueryEncryptedTx{
 		IdentityPreimages: [][]byte{identityPreimage},
 	})
 	if err != nil {
-		return false, fmt.Errorf("error querying transaction: %w", err)
+		return false, fmt.Errorf("error querying encrypted transaction: %w", err)
 	}
 
-	if len(transactions) == 0 {
+	decryptionData, err := tm.decrytionDataRepo.QueryDecryptionData(context.Background(), &data.QueryDecryptionData{
+		IdentityPreimages: [][]byte{identityPreimage},
+	})
+	if err != nil {
+		return false, fmt.Errorf("error querying decryption data: %w", err)
+	}
+
+	if len(encryptedTx) == 0 || len(decryptionData) == 0 {
 		return false, nil
 	}
 	return true, nil
