@@ -39,21 +39,17 @@ func NewEncryptedTxRepository(db database.DB) *EncryptedTxRepo {
 }
 
 func (etr *EncryptedTxRepo) CreateEncryptedTx(ctx context.Context, tx *EncryptedTxV1) (*EncryptedTxV1, error) {
-	rows := etr.GetDB(ctx).QueryRow(ctx,
+	_, err := etr.GetDB(ctx).Query(ctx,
 		`INSERT into encrypted_tx 
 			(tx, 
 			identity_preimage) 
 		VALUES 
-			($1, $2) 
-		RETURNING
-			id,
-			tx,
-			identity_preimage,
-			created_at`, tx.Tx, tx.IdentityPreimage)
+			($1, $2)
+		ON CONFLICT DO NOTHING 
+		`, tx.Tx, tx.IdentityPreimage)
 
-	err := rows.Scan(&tx.ID, &tx.Tx, &tx.IdentityPreimage, &tx.CreatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to collect encrypted tx from insert result : %w", err)
+		return nil, fmt.Errorf("failed to insert encrypted transaction : %w", err)
 	}
 	return tx, nil
 }

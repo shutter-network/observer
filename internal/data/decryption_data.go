@@ -42,7 +42,7 @@ func NewDecryptionDataRepository(db database.DB) *DecryptionDataRepo {
 }
 
 func (ddr *DecryptionDataRepo) CreateDecryptionData(ctx context.Context, dd *DecryptionDataV1) (*DecryptionDataV1, error) {
-	rows := ddr.GetDB(ctx).QueryRow(ctx,
+	_, err := ddr.GetDB(ctx).Query(ctx,
 		`INSERT into decryption_data
 			(key,
 			slot,
@@ -50,17 +50,11 @@ func (ddr *DecryptionDataRepo) CreateDecryptionData(ctx context.Context, dd *Dec
 			identity_preimage) 
 		VALUES 
 			($1, $2, $3, $4) 
-		RETURNING
-			id,
-			key,
-			slot,
-			block_hash,
-			identity_preimage,
-			created_at`, dd.Key, dd.Slot, dd.BlockHash, dd.IdentityPreimage)
+		ON CONFLICT DO NOTHING
+		`, dd.Key, dd.Slot, dd.BlockHash, dd.IdentityPreimage)
 
-	err := rows.Scan(&dd.ID, &dd.Key, &dd.Slot, &dd.BlockHash, &dd.IdentityPreimage, &dd.CreatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to collect decryption data from insert result : %w", err)
+		return nil, fmt.Errorf("failed to insert decryption data : %w", err)
 	}
 	return dd, nil
 }

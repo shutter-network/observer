@@ -41,23 +41,18 @@ func NewKeyShareRepository(db database.DB) *KeyShareRepo {
 }
 
 func (ksr *KeyShareRepo) CreateKeyShare(ctx context.Context, kk *KeyShareV1) (*KeyShareV1, error) {
-	rows := ksr.GetDB(ctx).QueryRow(ctx,
+	_, err := ksr.GetDB(ctx).Query(ctx,
 		`INSERT into key_share
 			(key_share,
 			slot,
 			identity_preimage) 
 		VALUES 
 			($1, $2, $3) 
-		RETURNING
-			id,
-			key_share,
-			slot,
-			identity_preimage,
-			created_at`, kk.KeyShare, kk.Slot, kk.IdentityPreimage)
+		ON CONFLICT DO NOTHING
+		`, kk.KeyShare, kk.Slot, kk.IdentityPreimage)
 
-	err := rows.Scan(&kk.ID, &kk.KeyShare, &kk.Slot, &kk.IdentityPreimage, &kk.CreatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to collect key share from insert result : %w", err)
+		return nil, fmt.Errorf("failed to insert key share : %w", err)
 	}
 	return kk, nil
 }
