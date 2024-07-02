@@ -22,7 +22,7 @@ func NewMetricsServer(config *common.MetricsServerConfig) *MetricsServer {
 	return &MetricsServer{config: config, mux: http.NewServeMux()}
 }
 
-func (srv *MetricsServer) Start(ctx context.Context, runner service.Runner) error { //nolint:unparam
+func (srv *MetricsServer) Start(ctx context.Context, runner service.Runner) error {
 	runner.Go(func() error {
 		srv.mux.Handle("/metrics", promhttp.Handler())
 		addr := fmt.Sprintf("%s:%d", srv.config.Host, srv.config.Port)
@@ -44,6 +44,7 @@ func (srv *MetricsServer) Start(ctx context.Context, runner service.Runner) erro
 		srv.Shutdown()
 		return ctx.Err()
 	})
+
 	return nil
 }
 

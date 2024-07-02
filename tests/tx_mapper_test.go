@@ -6,27 +6,29 @@ import (
 
 	cryptorand "crypto/rand"
 
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
-	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
+	blst "github.com/supranational/blst/bindings/go"
 	"gotest.tools/assert"
 )
 
 var tx = []byte("mimic an evm compatible transaction")
 
-func equalG2(a, b *bls12381.PointG2) bool {
-	g2 := bls12381.NewG2()
-	return g2.Equal(a, b)
+func bigToScalar(i *big.Int) *blst.Scalar {
+	b := make([]byte, 32)
+	i.FillBytes(b)
+	s := new(blst.Scalar)
+	s.FromBEndian(b)
+	return s
 }
 
-var (
-	g2Comparer = gocmp.Comparer(equalG2)
-)
+func generateP2(i *big.Int) *blst.P2Affine {
+	s := bigToScalar(i)
+	return blst.P2Generator().Mult(s).ToAffine()
+}
 
 func (s *TestMetricsSuite) makeKeys() (*shcrypto.EonPublicKey, *shcrypto.EpochSecretKey, *shcrypto.EpochID) {
 	s.T().Helper()
-	g2 := bls12381.NewG2()
 	n := 3
 	threshold := uint64(2)
 	epochID := shcrypto.ComputeEpochID([]byte("epoch1"))
@@ -56,12 +58,14 @@ func (s *TestMetricsSuite) makeKeys() (*shcrypto.EonPublicKey, *shcrypto.EpochSe
 		epochSecretKeyShares = append(epochSecretKeyShares, shcrypto.ComputeEpochSecretKeyShare(eonSecretKeyShares[i], epochID))
 	}
 	eonPublicKey := shcrypto.ComputeEonPublicKey(gammas)
-	assert.DeepEqual(s.T(), g2.MulScalar(new(bls12381.PointG2), g2.One(), eonSecretKey), (*bls12381.PointG2)(eonPublicKey), g2Comparer)
+	eonPublicKeyExp := (*shcrypto.EonPublicKey)(generateP2(eonSecretKey))
+	assert.Assert(s.T(), eonPublicKey.Equal(eonPublicKeyExp))
 	epochSecretKey, err := shcrypto.ComputeEpochSecretKey(
 		[]int{0, 1},
 		[]*shcrypto.EpochSecretKeyShare{epochSecretKeyShares[0], epochSecretKeyShares[1]},
 		threshold)
 	assert.NilError(s.T(), err)
+
 	return eonPublicKey, epochSecretKey, epochID
 }
 

@@ -65,16 +65,17 @@ func Start() error {
 	// start services here
 	ctx := context.Background()
 
-	watcher := watcher.New(&config)
-	services := []service.Service{watcher}
+	services := []service.Service{}
 	if !config.NoDB {
 		metrics.EnableMetrics()
 		//TODO: make a decision to add host and port via cli args for metrics
 		metricsServer := metrics.NewMetricsServer(&metricsCommon.MetricsServerConfig{
 			Host: "localhost",
-			Port: 8080,
+			Port: 4000,
 		})
 		services = append(services, metricsServer)
 	}
+	watcher := watcher.New(&config)
+	services = append(services, watcher)
 	return service.Run(ctx, services...)
 }
