@@ -12,15 +12,7 @@ import (
 
 func (dkw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([]p2pmsg.Message, error) {
 	t := time.Now()
-
 	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
-	if extra == nil {
-		log.Warn().
-			Int("num-keys", len(msg.Keys)).
-			Uint64("most-recent-block", dkw.mostRecentBlock).
-			Msg("received keys without any slot")
-		return []p2pmsg.Message{}, nil
-	}
 	dkw.decryptionDataChannel <- &DecryptionKeysEvent{
 		Keys: msg.Keys,
 		Slot: extra.Slot,

@@ -73,7 +73,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		return err
 	}
 
-	// runner.Go(func() error {
 	for {
 		select {
 		case block := <-blocksChannel:
@@ -125,8 +124,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 			}
 		}
 	}
-	// })
-	// return nil
 }
 
 func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {

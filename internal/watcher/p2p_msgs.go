@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2p"
@@ -68,7 +69,27 @@ func (dkw *P2PMsgsWatcher) MessagePrototypes() []p2pmsg.Message {
 	}
 }
 
-func (dkw *P2PMsgsWatcher) ValidateMessage(_ context.Context, _ p2pmsg.Message) (pubsub.ValidationResult, error) {
+func (dkw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.Message) (pubsub.ValidationResult, error) {
+	switch msg := msgUntyped.(type) {
+	case *p2pmsg.DecryptionKeys:
+		extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
+		if extra == nil {
+			log.Warn().
+				Int("num-keys", len(msg.Keys)).
+				Uint64("most-recent-block", dkw.mostRecentBlock).
+				Msg("received DecryptionKeys without any slot")
+			return pubsub.ValidationReject, nil
+		}
+	case *p2pmsg.DecryptionKeyShares:
+		extra := msg.Extra.(*p2pmsg.DecryptionKeyShares_Gnosis).Gnosis
+		if extra == nil {
+			log.Warn().
+				Int("num-keyshares", len(msg.Shares)).
+				Uint64("most-recent-block", dkw.mostRecentBlock).
+				Msg("received DecryptionKeyShares without any slot")
+			return pubsub.ValidationReject, nil
+		}
+	}
 	return pubsub.ValidationAccept, nil
 }
 
