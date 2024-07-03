@@ -22,14 +22,15 @@ func (dkw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 		return []p2pmsg.Message{}, nil
 	}
 	dkw.decryptionDataChannel <- &DecryptionKeysEvent{
+		Eon:  int64(msg.Eon),
 		Keys: msg.Keys,
-		Slot: extra.Slot,
+		Slot: int64(extra.Slot),
 	}
 
-	ev, ok := dkw.getBlockFromSlot(extra.Slot)
+	ev, ok := dkw.getBlockFromSlot(int64(extra.Slot))
 	if !ok {
 		mostRecentBlock := dkw.recentBlocks[dkw.mostRecentBlock]
-		mostRecentSlot := getSlotForBlock(mostRecentBlock.Header)
+		mostRecentSlot := uint64(getSlotForBlock(mostRecentBlock.Header))
 
 		if extra.Slot > mostRecentSlot+1 {
 			log.Warn().
@@ -95,11 +96,11 @@ func (dkw *P2PMsgsWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 	}
 }
 
-func (dkw *P2PMsgsWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, bool) {
+func (dkw *P2PMsgsWatcher) getBlockFromSlot(slot int64) (*BlockReceivedEvent, bool) {
 	dkw.recentBlocksMux.Lock()
 	defer dkw.recentBlocksMux.Unlock()
 
-	slotTimestamp := getSlotTimestamp(slot)
+	slotTimestamp := uint64(getSlotTimestamp(slot))
 	if ev, ok := dkw.recentBlocks[dkw.mostRecentBlock]; ok {
 		if ev.Header.Time == slotTimestamp {
 			return ev, ok
@@ -119,10 +120,10 @@ func (dkw *P2PMsgsWatcher) getBlockFromSlot(slot uint64) (*BlockReceivedEvent, b
 	return nil, false
 }
 
-func getSlotTimestamp(slot uint64) uint64 {
-	return uint64(GenesisTimestamp) + (slot)*uint64(SlotDuration)
+func getSlotTimestamp(slot int64) int64 {
+	return GenesisTimestamp + (slot)*SlotDuration
 }
 
-func getSlotForBlock(blockHeader *types.Header) uint64 {
-	return (blockHeader.Time - uint64(GenesisTimestamp)) / uint64(SlotDuration)
+func getSlotForBlock(blockHeader *types.Header) int64 {
+	return (int64(blockHeader.Time) - GenesisTimestamp) / SlotDuration
 }

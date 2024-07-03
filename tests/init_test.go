@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"path"
 	"runtime"
 	"testing"
@@ -18,11 +19,9 @@ type TestMetricsSuite struct {
 	testDB    *common.TestDatabase
 	txManager *database.TxManager
 
-	txMapper           metrics.TxMapper
-	txMapperDB         metrics.TxMapper
-	encryptedTxRepo    *data.EncryptedTxRepo
-	decryptionDataRepo *data.DecryptionDataRepo
-	keyShareRepo       *data.KeyShareRepo
+	txMapper   metrics.TxMapper
+	txMapperDB metrics.TxMapper
+	dbQuery    *data.Queries
 }
 
 func TestMain(t *testing.T) {
@@ -34,6 +33,7 @@ func (s *TestMetricsSuite) TearDownAllSuite() {
 }
 
 func (s *TestMetricsSuite) SetupSuite() {
+	ctx := context.Background()
 	_, curFile, _, _ := runtime.Caller(0)
 	curDir := path.Dir(curFile)
 
@@ -41,11 +41,9 @@ func (s *TestMetricsSuite) SetupSuite() {
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
 	s.txManager = database.NewTxManager(s.testDB.DbInstance)
-	s.encryptedTxRepo = data.NewEncryptedTxRepository(s.testDB.DbInstance)
-	s.decryptionDataRepo = data.NewDecryptionDataRepository(s.testDB.DbInstance)
-	s.keyShareRepo = data.NewKeyShareRepository(s.testDB.DbInstance)
 
-	s.txMapperDB = metrics.NewTxMapperDB(s.encryptedTxRepo, s.decryptionDataRepo, s.keyShareRepo, s.txManager)
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.txManager)
+	s.dbQuery = data.New(s.txManager.GetDB(ctx))
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {

@@ -2,32 +2,37 @@
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS encrypted_tx
 (
-    id                  BIGSERIAL PRIMARY KEY,
-    tx                  BYTEA                                  NOT NULL,
-    identity_preimage   BYTEA UNIQUE                           NOT NULL,
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+    tx_index                    BIGINT                                 NOT NULL,
+    eon                         BIGINT                                 NOT NULL,
+    tx                          BYTEA                                  NOT NULL,
+    identity_preimage           BYTEA                                  NOT NULL,
+    created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    PRIMARY KEY (tx_index, eon)
 );
 
 CREATE TABLE IF NOT EXISTS decryption_data
 (
-    id                  BIGSERIAL PRIMARY KEY,
-    "key"               BYTEA                                  NOT NULL,
-    slot                BIGINT                                 NOT NULL,
-    block_hash          BYTEA,
-    identity_preimage   BYTEA UNIQUE                           NOT NULL,
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+    eon                          BIGINT                                 NOT NULL,
+    identity_preimage            BYTEA                                  NOT NULL,     
+    decryption_key               BYTEA                                  NOT NULL,
+    slot                         BIGINT                                 NOT NULL,
+    block_hash                   BYTEA,
+    created_at                   TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at                   TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    PRIMARY KEY (eon, identity_preimage)
 );
 
-CREATE TABLE IF NOT EXISTS key_share
+CREATE TABLE IF NOT EXISTS decryption_key_share
 (
-    id                  BIGSERIAL PRIMARY KEY,
-    key_share           BYTEA                                  NOT NULL,
-    slot                BIGINT                                 NOT NULL,
-    identity_preimage   BYTEA UNIQUE                           NOT NULL,
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+    eon                         BIGINT                                  NOT NULL,
+    identity_preimage           BYTEA                                   NOT NULL,
+    keyper_index                BIGINT                                  NOT NULL,
+    decryption_key_share        BYTEA                                   NOT NULL,
+    slot                        BIGINT                                  NOT NULL,
+    created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
+    updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
+    PRIMARY KEY (eon, identity_preimage, keyper_index)
 );
 -- +goose StatementEnd
 
@@ -35,5 +40,5 @@ CREATE TABLE IF NOT EXISTS key_share
 -- +goose StatementBegin
 DROP TABLE encrypted_tx;
 DROP TABLE decryption_data;
-DROP TABLE key_share;
+DROP TABLE decryption_key_share;
 -- +goose StatementEnd

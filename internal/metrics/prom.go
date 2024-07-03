@@ -19,7 +19,7 @@ var (
 		Help: "Total Key share fetched from p2p",
 	})
 	metricsShutterTxIncludedInBlock = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "shutter_tx_included_in_block_total",
+		Name: "shutter_tx_should_be_included_in_block_total",
 		Help: "Total shutterized txs included in the block",
 	})
 )

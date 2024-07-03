@@ -78,9 +78,11 @@ func (s *TestMetricsSuite) TestAddTxWhenEncryptionTxReceivedFirst() {
 
 	encrypedTxBytes := encryptedTransaction.Marshal()
 
-	s.txMapper.AddEncryptedTx(identity.Marshal(), encrypedTxBytes)
+	txIndex := rand.Int63()
+	eon := rand.Int63()
+	s.txMapper.AddEncryptedTx(txIndex, eon, identity.Marshal(), encrypedTxBytes)
 
-	hasComplete, err := s.txMapper.CanBeDecrypted(identity.Marshal())
+	hasComplete, err := s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
 	s.Require().NoError(err)
 	s.Require().False(hasComplete)
 
@@ -89,25 +91,26 @@ func (s *TestMetricsSuite) TestAddTxWhenEncryptionTxReceivedFirst() {
 
 	s.Require().Equal(tx, decryptedMessage)
 
-	s.txMapper.AddDecryptionData(identity.Marshal(), &metrics.DecryptionData{
+	s.txMapper.AddDecryptionData(eon, identity.Marshal(), &metrics.DecryptionData{
 		Key:  decryptionKey.Marshal(),
-		Slot: rand.Uint64(),
+		Slot: rand.Int63(),
 	})
 
-	hasComplete, err = s.txMapper.CanBeDecrypted(identity.Marshal())
+	hasComplete, err = s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
 	s.Require().NoError(err)
 	s.Require().True(hasComplete)
 }
 
 func (s *TestMetricsSuite) TestAddTxWhenDecryptionKeysReceivedFirst() {
 	eonPublicKey, decryptionKey, identity := s.makeKeys()
-
-	s.txMapper.AddDecryptionData(identity.Marshal(), &metrics.DecryptionData{
+	txIndex := rand.Int63()
+	eon := rand.Int63()
+	s.txMapper.AddDecryptionData(eon, identity.Marshal(), &metrics.DecryptionData{
 		Key:  decryptionKey.Marshal(),
-		Slot: rand.Uint64(),
+		Slot: rand.Int63(),
 	})
 
-	hasComplete, err := s.txMapper.CanBeDecrypted(identity.Marshal())
+	hasComplete, err := s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
 	s.Require().NoError(err)
 	s.Require().False(hasComplete)
 
@@ -118,14 +121,14 @@ func (s *TestMetricsSuite) TestAddTxWhenDecryptionKeysReceivedFirst() {
 
 	encrypedTxBytes := encryptedTransaction.Marshal()
 
-	s.txMapper.AddEncryptedTx(identity.Marshal(), encrypedTxBytes)
+	s.txMapper.AddEncryptedTx(txIndex, eon, identity.Marshal(), encrypedTxBytes)
 
 	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
 	s.Require().NoError(err)
 
 	s.Require().Equal(tx, decryptedMessage)
 
-	hasComplete, err = s.txMapper.CanBeDecrypted(identity.Marshal())
+	hasComplete, err = s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
 	s.Require().NoError(err)
 	s.Require().True(hasComplete)
 }

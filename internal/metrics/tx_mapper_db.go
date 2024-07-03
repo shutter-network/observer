@@ -10,28 +10,22 @@ import (
 )
 
 type TxMapperDB struct {
-	encryptedTxRepo   *data.EncryptedTxRepo
-	decrytionDataRepo *data.DecryptionDataRepo
-	keyShareRepo      *data.KeyShareRepo
-	txManager         *database.TxManager
+	dbQuery *data.Queries
 }
 
 func NewTxMapperDB(
-	etr *data.EncryptedTxRepo,
-	ddr *data.DecryptionDataRepo,
-	ksr *data.KeyShareRepo,
+	ctx context.Context,
 	txManager *database.TxManager,
 ) TxMapper {
 	return &TxMapperDB{
-		encryptedTxRepo:   etr,
-		decrytionDataRepo: ddr,
-		keyShareRepo:      ksr,
-		txManager:         txManager,
+		dbQuery: data.New(txManager.GetDB(ctx)),
 	}
 }
 
-func (tm *TxMapperDB) AddEncryptedTx(identityPreimage []byte, encryptedTx []byte) error {
-	_, err := tm.encryptedTxRepo.CreateEncryptedTx(context.Background(), &data.EncryptedTxV1{
+func (tm *TxMapperDB) AddEncryptedTx(txIndex int64, eon int64, identityPreimage []byte, encryptedTx []byte) error {
+	err := tm.dbQuery.CreateEncryptedTx(context.Background(), data.CreateEncryptedTxParams{
+		TxIndex:          txIndex,
+		Eon:              eon,
 		Tx:               encryptedTx,
 		IdentityPreimage: identityPreimage,
 	})
@@ -42,9 +36,10 @@ func (tm *TxMapperDB) AddEncryptedTx(identityPreimage []byte, encryptedTx []byte
 	return nil
 }
 
-func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionData) error {
-	_, err := tm.decrytionDataRepo.CreateDecryptionData(context.Background(), &data.DecryptionDataV1{
-		Key:              dd.Key,
+func (tm *TxMapperDB) AddDecryptionData(eon int64, identityPreimage []byte, dd *DecryptionData) error {
+	err := tm.dbQuery.CreateDecryptionData(context.Background(), data.CreateDecryptionDataParams{
+		Eon:              eon,
+		DecryptionKey:    dd.Key,
 		Slot:             int64(dd.Slot),
 		IdentityPreimage: identityPreimage,
 	})
@@ -55,11 +50,13 @@ func (tm *TxMapperDB) AddDecryptionData(identityPreimage []byte, dd *DecryptionD
 	return nil
 }
 
-func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
-	_, err := tm.keyShareRepo.CreateKeyShare(context.Background(), &data.KeyShareV1{
-		KeyShare:         ks.Share,
-		Slot:             int64(ks.Slot),
-		IdentityPreimage: identityPreimage,
+func (tm *TxMapperDB) AddKeyShare(eon int64, identityPreimage []byte, keyperIndex int64, ks *KeyShare) error {
+	err := tm.dbQuery.CreateDecryptionKeyShare(context.Background(), data.CreateDecryptionKeyShareParams{
+		Eon:                eon,
+		DecryptionKeyShare: ks.Share,
+		Slot:               int64(ks.Slot),
+		IdentityPreimage:   identityPreimage,
+		KeyperIndex:        keyperIndex,
 	})
 	if err != nil {
 		return err
@@ -68,22 +65,12 @@ func (tm *TxMapperDB) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
 	return nil
 }
 
-func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash common.Hash) error {
+func (tm *TxMapperDB) AddBlockHash(slot int64, blockHash common.Hash) error {
 	ctx := context.Background()
-	decryptionData, err := tm.decrytionDataRepo.QueryDecryptionData(ctx, &data.QueryDecryptionData{
-		Slots:  []int64{int64(slot)},
-		DoLock: true,
+	err := tm.dbQuery.UpdateBlockHash(ctx, data.UpdateBlockHashParams{
+		Slot:      slot,
+		BlockHash: blockHash.Bytes(),
 	})
-
-	if err != nil {
-		return fmt.Errorf("error querying decryption data: %w", err)
-	}
-
-	if len(decryptionData) == 0 {
-		return nil
-	}
-	decryptionData[0].BlockHash = blockHash.Bytes()
-	_, err = tm.decrytionDataRepo.UpdateDecryptionData(ctx, decryptionData[0])
 	if err != nil {
 		return err
 	}
@@ -91,16 +78,18 @@ func (tm *TxMapperDB) AddBlockHash(slot uint64, blockHash common.Hash) error {
 	return nil
 }
 
-func (tm *TxMapperDB) CanBeDecrypted(identityPreimage []byte) (bool, error) {
-	encryptedTx, err := tm.encryptedTxRepo.QueryEncryptedTx(context.Background(), &data.QueryEncryptedTx{
-		IdentityPreimages: [][]byte{identityPreimage},
+func (tm *TxMapperDB) CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error) {
+	encryptedTx, err := tm.dbQuery.QueryEncryptedTx(context.Background(), data.QueryEncryptedTxParams{
+		TxIndex: txIndex,
+		Eon:     eon,
 	})
 	if err != nil {
 		return false, fmt.Errorf("error querying encrypted transaction: %w", err)
 	}
 
-	decryptionData, err := tm.decrytionDataRepo.QueryDecryptionData(context.Background(), &data.QueryDecryptionData{
-		IdentityPreimages: [][]byte{identityPreimage},
+	decryptionData, err := tm.dbQuery.QueryDecryptionData(context.Background(), data.QueryDecryptionDataParams{
+		Eon:              eon,
+		IdentityPreimage: identityPreimage,
 	})
 	if err != nil {
 		return false, fmt.Errorf("error querying decryption data: %w", err)

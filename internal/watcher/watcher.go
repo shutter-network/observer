@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/common/database"
-	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
@@ -32,8 +31,8 @@ const (
 )
 
 var (
-	GenesisTimestamp = 0
-	SlotDuration     = 0
+	GenesisTimestamp int64
+	SlotDuration     int64
 )
 
 type Watcher struct {
@@ -68,16 +67,15 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		return err
 	}
 
-	txMapper, err := getTxMapperImpl(w.config)
+	txMapper, err := getTxMapperImpl(ctx, w.config)
 	if err != nil {
 		return err
 	}
 
-	// runner.Go(func() error {
 	for {
 		select {
 		case block := <-blocksChannel:
-			slot := getSlotForBlock(block.Header)
+			slot := int64(getSlotForBlock(block.Header))
 			err := txMapper.AddBlockHash(slot, block.Header.Hash())
 			if err != nil {
 				log.Err(err).Msg("err adding block hash")
@@ -85,7 +83,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 			}
 		case enTx := <-encryptedTxChannel:
 			identityPreimage := computeIdentityPreimage(enTx.IdentityPrefix[:], enTx.Sender)
-			err := txMapper.AddEncryptedTx(identityPreimage, enTx.Tx)
+			err := txMapper.AddEncryptedTx(enTx.TxIndex, enTx.Eon, identityPreimage, enTx.Tx)
 			if err != nil {
 				log.Err(err).Msg("err adding encrypting transaction")
 				return err
@@ -95,7 +93,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 				Msg("new encrypted transaction")
 		case dd := <-decryptionDataChannel:
 			for _, key := range dd.Keys {
-				err := txMapper.AddDecryptionData(key.Identity, &metrics.DecryptionData{
+				err := txMapper.AddDecryptionData(dd.Eon, key.Identity, &metrics.DecryptionData{
 					Key:  key.Key,
 					Slot: dd.Slot,
 				})
@@ -105,12 +103,12 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 				}
 				log.Info().
 					Bytes("decryption keys", key.Key).
-					Uint64("slot", dd.Slot).
+					Int64("slot", dd.Slot).
 					Msg("new decryption key")
 			}
 		case ks := <-keyShareChannel:
 			for _, share := range ks.Shares {
-				err := txMapper.AddKeyShare(share.EpochID, &metrics.KeyShare{
+				err := txMapper.AddKeyShare(ks.Eon, share.EpochID, ks.KeyperIndex, &metrics.KeyShare{
 					Share: share.Share,
 					Slot:  ks.Slot,
 				})
@@ -120,22 +118,19 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 				}
 				log.Info().
 					Bytes("key shares", share.Share).
-					Uint64("slot", ks.Slot).
+					Int64("slot", ks.Slot).
 					Msg("new key shares")
 			}
 		}
 	}
-	// })
-	// return nil
 }
 
-func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
+func getTxMapperImpl(ctx context.Context, config *common.Config) (metrics.TxMapper, error) {
 	var txMapper metrics.TxMapper
 
 	if config.NoDB {
 		txMapper = metrics.NewTxMapperMemory()
 	} else {
-		ctx := context.Background()
 		var (
 			host     = os.Getenv("DB_HOST")
 			port     = os.Getenv("DB_PORT")
@@ -170,10 +165,7 @@ func getTxMapperImpl(config *common.Config) (metrics.TxMapper, error) {
 			return nil, err
 		}
 		txManager := database.NewTxManager(db)
-		encryptedTxRepo := data.NewEncryptedTxRepository(db)
-		decryptionDataRepo := data.NewDecryptionDataRepository(db)
-		keyShareRepo := data.NewKeyShareRepository(db)
-		txMapper = metrics.NewTxMapperDB(encryptedTxRepo, decryptionDataRepo, keyShareRepo, txManager)
+		txMapper = metrics.NewTxMapperDB(ctx, txManager)
 	}
 	return txMapper, nil
 }

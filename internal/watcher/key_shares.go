@@ -9,8 +9,10 @@ func (dkw *P2PMsgsWatcher) handleKeyShareMsg(msg *p2pmsg.DecryptionKeyShares) ([
 	extra := msg.Extra.(*p2pmsg.DecryptionKeyShares_Gnosis).Gnosis
 
 	dkw.keyShareChannel <- &KeyShareEvent{
-		Shares: msg.Shares,
-		Slot:   extra.Slot,
+		Eon:         int64(msg.Eon),
+		KeyperIndex: int64(msg.KeyperIndex),
+		Shares:      msg.Shares,
+		Slot:        int64(extra.Slot),
 	}
 
 	log.Info().

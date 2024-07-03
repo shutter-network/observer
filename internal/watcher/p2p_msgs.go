@@ -23,13 +23,16 @@ type P2PMsgsWatcher struct {
 }
 
 type DecryptionKeysEvent struct {
+	Eon  int64
 	Keys []*p2pmsg.Key
-	Slot uint64
+	Slot int64
 }
 
 type KeyShareEvent struct {
-	Shares []*p2pmsg.KeyShare
-	Slot   uint64
+	Eon         int64
+	KeyperIndex int64
+	Shares      []*p2pmsg.KeyShare
+	Slot        int64
 }
 
 func NewP2PMsgsWatcherWatcher(

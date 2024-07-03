@@ -21,6 +21,8 @@ type EncryptedTxWatcher struct {
 }
 
 type EncryptedTxReceivedEvent struct {
+	Eon            int64
+	TxIndex        int64
 	IdentityPrefix [32]byte
 	Sender         common.Address
 	Tx             []byte
@@ -41,8 +43,6 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner)
 		if err != nil {
 			return err
 		}
-
-		ctx := context.Background()
 		watchOpts := &bind.WatchOpts{Context: ctx, Start: nil}
 
 		txSubmittedEventChannel := make(chan *sequencerBindings.SequencerTransactionSubmitted)
@@ -59,6 +59,8 @@ func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner)
 				return err
 			case event := <-txSubmittedEventChannel:
 				ev := &EncryptedTxReceivedEvent{
+					TxIndex:        int64(event.TxIndex),
+					Eon:            int64(event.Eon),
 					IdentityPrefix: event.IdentityPrefix,
 					Sender:         event.Sender,
 					Tx:             event.EncryptedTransaction,
