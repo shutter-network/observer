@@ -12,7 +12,6 @@ import (
 
 func (dkw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([]p2pmsg.Message, error) {
 	t := time.Now()
-
 	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
 	dkw.decryptionDataChannel <- &DecryptionKeysEvent{
 		Keys: msg.Keys,

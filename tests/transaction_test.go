@@ -85,8 +85,13 @@ func (s *TestMetricsSuite) TestUpdateBlockHashTransaction() {
 	s.Require().NoError(err)
 	s.Require().NotNil(dd)
 
-	dd.BlockHash = blockHash
-	updTx, err := s.decryptionDataRepo.UpdateDecryptionData(ctx, dd)
+	dds, err := s.decryptionDataRepo.QueryDecryptionData(ctx, &data.QueryDecryptionData{
+		IdentityPreimages: [][]byte{identityPreimage},
+	})
+	s.Require().NoError(err)
+
+	dds[0].BlockHash = blockHash
+	updTx, err := s.decryptionDataRepo.UpdateDecryptionData(ctx, dds[0])
 
 	s.Require().NoError(err)
 	s.Require().Equal(updTx.Key, dk)

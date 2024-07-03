@@ -6,6 +6,7 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/gnosh-metrics/internal/watcher"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/encodeable/keys"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
@@ -61,9 +62,20 @@ func Cmd() *cobra.Command {
 }
 
 func Start() error {
-	// start watchers here
+	// start services here
 	ctx := context.Background()
 
+	services := []service.Service{}
+	if !config.NoDB {
+		metrics.EnableMetrics()
+		//TODO: make a decision to add host and port via cli args for metrics
+		metricsServer := metrics.NewMetricsServer(&metricsCommon.MetricsServerConfig{
+			Host: "localhost",
+			Port: 4000,
+		})
+		services = append(services, metricsServer)
+	}
 	watcher := watcher.New(&config)
-	return service.Run(ctx, watcher)
+	services = append(services, watcher)
+	return service.Run(ctx, services...)
 }

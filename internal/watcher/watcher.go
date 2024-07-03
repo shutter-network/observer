@@ -72,9 +72,9 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	if err != nil {
 		return err
 	}
+
 	for {
 		select {
-
 		case block := <-blocksChannel:
 			slot := getSlotForBlock(block.Header)
 			err := txMapper.AddBlockHash(slot, block.Header.Hash())
@@ -92,7 +92,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 			log.Info().
 				Bytes("encrypted transaction", enTx.Tx).
 				Msg("new encrypted transaction")
-
 		case dd := <-decryptionDataChannel:
 			for _, key := range dd.Keys {
 				err := txMapper.AddDecryptionData(key.Identity, &metrics.DecryptionData{
