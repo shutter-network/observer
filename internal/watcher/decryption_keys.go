@@ -21,22 +21,22 @@ func (dkw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 
 	ev, ok := dkw.getBlockFromSlot(int64(extra.Slot))
 	if !ok {
-		mostRecentBlock := dkw.recentBlocks[dkw.mostRecentBlock]
-		mostRecentSlot := uint64(getSlotForBlock(mostRecentBlock.Header))
-
-		if extra.Slot > mostRecentSlot+1 {
-			log.Warn().
+		if mostRecentBlock, ok := dkw.recentBlocks[dkw.mostRecentBlock]; ok {
+			mostRecentSlot := uint64(getSlotForBlock(mostRecentBlock.Header))
+			if extra.Slot > mostRecentSlot+1 {
+				log.Warn().
+					Uint64("slot", extra.Slot).
+					Uint64("expected-slot", mostRecentSlot+1).
+					Uint64("most-recent-block", dkw.mostRecentBlock).
+					Msg("received keys for a slot greater then expected slot")
+			}
+			log.Info().
 				Uint64("slot", extra.Slot).
-				Uint64("expected-slot", mostRecentSlot+1).
+				Int("num-keys", len(msg.Keys)).
 				Uint64("most-recent-block", dkw.mostRecentBlock).
-				Msg("received keys for a slot greater then expected slot")
+				Uint64("most-recent-slot", mostRecentSlot).
+				Msg("received keys for future slot")
 		}
-		log.Info().
-			Uint64("slot", extra.Slot).
-			Int("num-keys", len(msg.Keys)).
-			Uint64("most-recent-block", dkw.mostRecentBlock).
-			Uint64("most-recent-slot", mostRecentSlot).
-			Msg("received keys for future slot")
 		return []p2pmsg.Message{}, nil
 	}
 
