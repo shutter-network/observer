@@ -1,35 +1,46 @@
--- name: CreateEncryptedTx :exec
-INSERT into encrypted_tx (
-    tx_index, 
+-- name: CreateTransactionSubmittedEvent :exec
+INSERT into transaction_submitted_event (
+    event_block_hash, 
+	event_block_number,
+	event_tx_index,
+	event_log_index,
 	eon,
-	tx,
-	identity_preimage
+	tx_index,
+	identity_prefix,
+	sender,
+	encrypted_transaction
 ) 
-VALUES ($1, $2, $3, $4)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT DO NOTHING;
 
--- name: QueryEncryptedTx :many
-SELECT * FROM encrypted_tx
-WHERE tx_index = $1 AND eon = $2;
-
--- name: CreateDecryptionData :exec
-INSERT into decryption_data(
-    eon,
-	identity_preimage,
-	decryption_key,
-	slot
+-- name: CreateDecryptionKeyMessage :exec
+INSERT into decryption_keys_message(
+    slot,
+	instance_id,
+	eon,
+	tx_pointer
 ) 
 VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING;
 
--- name: UpdateBlockHash :exec
-UPDATE decryption_data
-SET block_hash = $2
-WHERE slot = $1;
+-- name: CreateDecryptionKey :exec
+INSERT into decryption_key(
+    eon,
+	identity_preimage,
+	key
+) 
+VALUES ($1, $2, $3) 
+ON CONFLICT DO NOTHING;
 
--- name: QueryDecryptionData :many
-SELECT * FROM decryption_data
-WHERE eon = $1 AND identity_preimage = $2;
+-- name: CreateDecryptionKeysMessageDecryptionKey :exec
+INSERT into decryption_keys_message_decryption_key(
+    decryption_keys_message_slot,
+	key_index,
+	decryption_key_eon,
+	decryption_key_identity_preimage
+) 
+VALUES ($1, $2, $3, $4) 
+ON CONFLICT DO NOTHING;
 
 -- name: CreateDecryptionKeyShare :exec
 INSERT into decryption_key_share(

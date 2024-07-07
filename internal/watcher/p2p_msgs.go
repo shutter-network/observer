@@ -24,9 +24,11 @@ type P2PMsgsWatcher struct {
 }
 
 type DecryptionKeysEvent struct {
-	Eon  int64
-	Keys []*p2pmsg.Key
-	Slot int64
+	Eon        int64
+	Keys       []*p2pmsg.Key
+	Slot       int64
+	InstanceID int64
+	TxPointer  int64
 }
 
 type KeyShareEvent struct {

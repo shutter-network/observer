@@ -14,9 +14,11 @@ func (dkw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 	t := time.Now()
 	extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
 	dkw.decryptionDataChannel <- &DecryptionKeysEvent{
-		Eon:  int64(msg.Eon),
-		Keys: msg.Keys,
-		Slot: int64(extra.Slot),
+		Eon:        int64(msg.Eon),
+		Keys:       msg.Keys,
+		Slot:       int64(extra.Slot),
+		InstanceID: int64(msg.InstanceID),
+		TxPointer:  int64(extra.TxPointer),
 	}
 
 	ev, ok := dkw.getBlockFromSlot(int64(extra.Slot))

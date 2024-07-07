@@ -8,12 +8,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type DecryptionDatum struct {
+type DecryptionKey struct {
 	Eon              int64
 	IdentityPreimage []byte
-	DecryptionKey    []byte
-	Slot             int64
-	BlockHash        []byte
+	Key              []byte
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 }
@@ -28,11 +26,34 @@ type DecryptionKeyShare struct {
 	UpdatedAt          pgtype.Timestamptz
 }
 
-type EncryptedTx struct {
-	TxIndex          int64
-	Eon              int64
-	Tx               []byte
-	IdentityPreimage []byte
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+type DecryptionKeysMessage struct {
+	Slot       int64
+	InstanceID int64
+	Eon        int64
+	TxPointer  int64
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
+type DecryptionKeysMessageDecryptionKey struct {
+	DecryptionKeysMessageSlot     int64
+	KeyIndex                      int64
+	DecryptionKeyEon              int64
+	DecryptionKeyIdentityPreimage []byte
+	CreatedAt                     pgtype.Timestamptz
+	UpdatedAt                     pgtype.Timestamptz
+}
+
+type TransactionSubmittedEvent struct {
+	EventBlockHash       []byte
+	EventBlockNumber     int64
+	EventTxIndex         int64
+	EventLogIndex        int64
+	Eon                  int64
+	TxIndex              int64
+	IdentityPrefix       []byte
+	Sender               []byte
+	EncryptedTransaction []byte
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }

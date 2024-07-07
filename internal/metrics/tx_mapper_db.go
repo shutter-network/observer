@@ -2,32 +2,37 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/shutter-network/gnosh-metrics/common/database"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
 
 type TxMapperDB struct {
+	db      *pgxpool.Pool
 	dbQuery *data.Queries
 }
 
 func NewTxMapperDB(
 	ctx context.Context,
-	txManager *database.TxManager,
+	db *pgxpool.Pool,
 ) TxMapper {
 	return &TxMapperDB{
-		dbQuery: data.New(txManager.GetDB(ctx)),
+		db:      db,
+		dbQuery: data.New(db),
 	}
 }
 
-func (tm *TxMapperDB) AddEncryptedTx(txIndex int64, eon int64, identityPreimage []byte, encryptedTx []byte) error {
-	err := tm.dbQuery.CreateEncryptedTx(context.Background(), data.CreateEncryptedTxParams{
-		TxIndex:          txIndex,
-		Eon:              eon,
-		Tx:               encryptedTx,
-		IdentityPreimage: identityPreimage,
+func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error {
+	err := tm.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+		EventBlockHash:       tse.EventBlockHash,
+		EventBlockNumber:     tse.EventBlockNumber,
+		EventTxIndex:         tse.EventTxIndex,
+		EventLogIndex:        tse.EventLogIndex,
+		Eon:                  tse.Eon,
+		TxIndex:              tse.TxIndex,
+		IdentityPrefix:       tse.IdentityPrefix,
+		Sender:               tse.Sender,
+		EncryptedTransaction: tse.EncryptedTransaction,
 	})
 	if err != nil {
 		return err
@@ -36,27 +41,57 @@ func (tm *TxMapperDB) AddEncryptedTx(txIndex int64, eon int64, identityPreimage 
 	return nil
 }
 
-func (tm *TxMapperDB) AddDecryptionData(eon int64, identityPreimage []byte, dd *DecryptionData) error {
-	err := tm.dbQuery.CreateDecryptionData(context.Background(), data.CreateDecryptionDataParams{
-		Eon:              eon,
-		DecryptionKey:    dd.Key,
-		Slot:             int64(dd.Slot),
-		IdentityPreimage: identityPreimage,
+func (tm *TxMapperDB) AddDecryptionKeyAndMessage(
+	ctx context.Context,
+	dk *data.DecryptionKey,
+	dkm *data.DecryptionKeysMessage,
+	dkmdk *data.DecryptionKeysMessageDecryptionKey,
+) error {
+	tx, err := tm.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := tm.dbQuery.WithTx(tx)
+	err = qtx.CreateDecryptionKey(ctx, data.CreateDecryptionKeyParams{
+		Eon:              dk.Eon,
+		IdentityPreimage: dk.IdentityPreimage,
+		Key:              dk.Key,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = qtx.CreateDecryptionKeyMessage(ctx, data.CreateDecryptionKeyMessageParams{
+		Slot:       dkm.Slot,
+		InstanceID: dkm.InstanceID,
+		Eon:        dkm.Eon,
+		TxPointer:  dkm.TxPointer,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = qtx.CreateDecryptionKeysMessageDecryptionKey(ctx, data.CreateDecryptionKeysMessageDecryptionKeyParams{
+		DecryptionKeysMessageSlot:     dkmdk.DecryptionKeysMessageSlot,
+		KeyIndex:                      dkmdk.KeyIndex,
+		DecryptionKeyEon:              dkmdk.DecryptionKeyEon,
+		DecryptionKeyIdentityPreimage: dkmdk.DecryptionKeyIdentityPreimage,
 	})
 	if err != nil {
 		return err
 	}
 	metricsDecKeyReceived.Inc()
-	return nil
+	return tx.Commit(ctx)
 }
 
-func (tm *TxMapperDB) AddKeyShare(eon int64, identityPreimage []byte, keyperIndex int64, ks *KeyShare) error {
+func (tm *TxMapperDB) AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error {
 	err := tm.dbQuery.CreateDecryptionKeyShare(context.Background(), data.CreateDecryptionKeyShareParams{
-		Eon:                eon,
-		DecryptionKeyShare: ks.Share,
-		Slot:               int64(ks.Slot),
-		IdentityPreimage:   identityPreimage,
-		KeyperIndex:        keyperIndex,
+		Eon:                dks.Eon,
+		DecryptionKeyShare: dks.DecryptionKeyShare,
+		Slot:               dks.Slot,
+		IdentityPreimage:   dks.IdentityPreimage,
+		KeyperIndex:        dks.KeyperIndex,
 	})
 	if err != nil {
 		return err
@@ -65,38 +100,25 @@ func (tm *TxMapperDB) AddKeyShare(eon int64, identityPreimage []byte, keyperInde
 	return nil
 }
 
-func (tm *TxMapperDB) AddBlockHash(slot int64, blockHash common.Hash) error {
-	ctx := context.Background()
-	err := tm.dbQuery.UpdateBlockHash(ctx, data.UpdateBlockHashParams{
-		Slot:      slot,
-		BlockHash: blockHash.Bytes(),
-	})
-	if err != nil {
-		return err
-	}
-	metricsShutterTxIncludedInBlock.Inc()
-	return nil
-}
+// func (tm *TxMapperDB) CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error) {
+// 	encryptedTx, err := tm.dbQuery.QueryEncryptedTx(context.Background(), data.QueryEncryptedTxParams{
+// 		TxIndex: txIndex,
+// 		Eon:     eon,
+// 	})
+// 	if err != nil {
+// 		return false, fmt.Errorf("error querying encrypted transaction: %w", err)
+// 	}
 
-func (tm *TxMapperDB) CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error) {
-	encryptedTx, err := tm.dbQuery.QueryEncryptedTx(context.Background(), data.QueryEncryptedTxParams{
-		TxIndex: txIndex,
-		Eon:     eon,
-	})
-	if err != nil {
-		return false, fmt.Errorf("error querying encrypted transaction: %w", err)
-	}
+// 	decryptionData, err := tm.dbQuery.QueryDecryptionData(context.Background(), data.QueryDecryptionDataParams{
+// 		Eon:              eon,
+// 		IdentityPreimage: identityPreimage,
+// 	})
+// 	if err != nil {
+// 		return false, fmt.Errorf("error querying decryption data: %w", err)
+// 	}
 
-	decryptionData, err := tm.dbQuery.QueryDecryptionData(context.Background(), data.QueryDecryptionDataParams{
-		Eon:              eon,
-		IdentityPreimage: identityPreimage,
-	})
-	if err != nil {
-		return false, fmt.Errorf("error querying decryption data: %w", err)
-	}
-
-	if len(encryptedTx) == 0 || len(decryptionData) == 0 {
-		return false, nil
-	}
-	return true, nil
-}
+// 	if len(encryptedTx) == 0 || len(decryptionData) == 0 {
+// 		return false, nil
+// 	}
+// 	return true, nil
+// }

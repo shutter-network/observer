@@ -1,12 +1,13 @@
 package tests
 
 import (
+	"context"
 	"math/big"
 	"math/rand"
 
 	cryptorand "crypto/rand"
 
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
 	blst "github.com/supranational/blst/bindings/go"
 	"gotest.tools/assert"
@@ -69,7 +70,7 @@ func (s *TestMetricsSuite) makeKeys() (*shcrypto.EonPublicKey, *shcrypto.EpochSe
 	return eonPublicKey, epochSecretKey, epochID
 }
 
-func (s *TestMetricsSuite) TestAddTxWhenEncryptionTxReceivedFirst() {
+func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 	eonPublicKey, decryptionKey, identity := s.makeKeys()
 
 	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
@@ -78,57 +79,53 @@ func (s *TestMetricsSuite) TestAddTxWhenEncryptionTxReceivedFirst() {
 
 	encrypedTxBytes := encryptedTransaction.Marshal()
 
+	ctx := context.Background()
 	txIndex := rand.Int63()
 	eon := rand.Int63()
-	s.txMapper.AddEncryptedTx(txIndex, eon, identity.Marshal(), encrypedTxBytes)
-
-	hasComplete, err := s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
+	eventBlockHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
-	s.Require().False(hasComplete)
+	eventBlockNumber := rand.Int63()
+	eventTxIndex := rand.Int63()
+	eventLogIndex := rand.Int63()
+	identityPrefix, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	sender, err := generateRandomBytes(20)
+	s.Require().NoError(err)
+	slot := rand.Int63()
+	instanceID := rand.Int63()
+	txPointer := rand.Int63()
+
+	s.txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
+		EventBlockHash:       eventBlockHash,
+		EventBlockNumber:     eventBlockNumber,
+		EventTxIndex:         eventTxIndex,
+		EventLogIndex:        eventLogIndex,
+		Eon:                  eon,
+		TxIndex:              txIndex,
+		IdentityPrefix:       identityPrefix,
+		Sender:               sender,
+		EncryptedTransaction: encrypedTxBytes,
+	})
 
 	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
 	s.Require().NoError(err)
 
 	s.Require().Equal(tx, decryptedMessage)
 
-	s.txMapper.AddDecryptionData(eon, identity.Marshal(), &metrics.DecryptionData{
-		Key:  decryptionKey.Marshal(),
-		Slot: rand.Int63(),
+	err = s.txMapper.AddDecryptionKeyAndMessage(ctx, &data.DecryptionKey{
+		Eon:              eon,
+		IdentityPreimage: identity.Marshal(),
+		Key:              decryptionKey.Marshal(),
+	}, &data.DecryptionKeysMessage{
+		Slot:       slot,
+		InstanceID: instanceID,
+		Eon:        eon,
+		TxPointer:  txPointer,
+	}, &data.DecryptionKeysMessageDecryptionKey{
+		DecryptionKeysMessageSlot:     slot,
+		KeyIndex:                      0,
+		DecryptionKeyEon:              eon,
+		DecryptionKeyIdentityPreimage: identity.Marshal(),
 	})
-
-	hasComplete, err = s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
 	s.Require().NoError(err)
-	s.Require().True(hasComplete)
-}
-
-func (s *TestMetricsSuite) TestAddTxWhenDecryptionKeysReceivedFirst() {
-	eonPublicKey, decryptionKey, identity := s.makeKeys()
-	txIndex := rand.Int63()
-	eon := rand.Int63()
-	s.txMapper.AddDecryptionData(eon, identity.Marshal(), &metrics.DecryptionData{
-		Key:  decryptionKey.Marshal(),
-		Slot: rand.Int63(),
-	})
-
-	hasComplete, err := s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
-	s.Require().NoError(err)
-	s.Require().False(hasComplete)
-
-	sigma, err := shcrypto.RandomSigma(cryptorand.Reader)
-	s.Require().NoError(err)
-
-	encryptedTransaction := shcrypto.Encrypt(tx, eonPublicKey, identity, sigma)
-
-	encrypedTxBytes := encryptedTransaction.Marshal()
-
-	s.txMapper.AddEncryptedTx(txIndex, eon, identity.Marshal(), encrypedTxBytes)
-
-	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
-	s.Require().NoError(err)
-
-	s.Require().Equal(tx, decryptedMessage)
-
-	hasComplete, err = s.txMapper.CanBeDecrypted(txIndex, eon, identity.Marshal())
-	s.Require().NoError(err)
-	s.Require().True(hasComplete)
 }

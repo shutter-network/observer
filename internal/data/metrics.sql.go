@@ -9,30 +9,51 @@ import (
 	"context"
 )
 
-const createDecryptionData = `-- name: CreateDecryptionData :exec
-INSERT into decryption_data(
+const createDecryptionKey = `-- name: CreateDecryptionKey :exec
+INSERT into decryption_key(
     eon,
 	identity_preimage,
-	decryption_key,
-	slot
+	key
+) 
+VALUES ($1, $2, $3) 
+ON CONFLICT DO NOTHING
+`
+
+type CreateDecryptionKeyParams struct {
+	Eon              int64
+	IdentityPreimage []byte
+	Key              []byte
+}
+
+func (q *Queries) CreateDecryptionKey(ctx context.Context, arg CreateDecryptionKeyParams) error {
+	_, err := q.db.Exec(ctx, createDecryptionKey, arg.Eon, arg.IdentityPreimage, arg.Key)
+	return err
+}
+
+const createDecryptionKeyMessage = `-- name: CreateDecryptionKeyMessage :exec
+INSERT into decryption_keys_message(
+    slot,
+	instance_id,
+	eon,
+	tx_pointer
 ) 
 VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING
 `
 
-type CreateDecryptionDataParams struct {
-	Eon              int64
-	IdentityPreimage []byte
-	DecryptionKey    []byte
-	Slot             int64
+type CreateDecryptionKeyMessageParams struct {
+	Slot       int64
+	InstanceID int64
+	Eon        int64
+	TxPointer  int64
 }
 
-func (q *Queries) CreateDecryptionData(ctx context.Context, arg CreateDecryptionDataParams) error {
-	_, err := q.db.Exec(ctx, createDecryptionData,
-		arg.Eon,
-		arg.IdentityPreimage,
-		arg.DecryptionKey,
+func (q *Queries) CreateDecryptionKeyMessage(ctx context.Context, arg CreateDecryptionKeyMessageParams) error {
+	_, err := q.db.Exec(ctx, createDecryptionKeyMessage,
 		arg.Slot,
+		arg.InstanceID,
+		arg.Eon,
+		arg.TxPointer,
 	)
 	return err
 }
@@ -68,70 +89,75 @@ func (q *Queries) CreateDecryptionKeyShare(ctx context.Context, arg CreateDecryp
 	return err
 }
 
-const createEncryptedTx = `-- name: CreateEncryptedTx :exec
-INSERT into encrypted_tx (
-    tx_index, 
-	eon,
-	tx,
-	identity_preimage
+const createDecryptionKeysMessageDecryptionKey = `-- name: CreateDecryptionKeysMessageDecryptionKey :exec
+INSERT into decryption_keys_message_decryption_key(
+    decryption_keys_message_slot,
+	key_index,
+	decryption_key_eon,
+	decryption_key_identity_preimage
 ) 
-VALUES ($1, $2, $3, $4)
+VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING
 `
 
-type CreateEncryptedTxParams struct {
-	TxIndex          int64
-	Eon              int64
-	Tx               []byte
-	IdentityPreimage []byte
+type CreateDecryptionKeysMessageDecryptionKeyParams struct {
+	DecryptionKeysMessageSlot     int64
+	KeyIndex                      int64
+	DecryptionKeyEon              int64
+	DecryptionKeyIdentityPreimage []byte
 }
 
-func (q *Queries) CreateEncryptedTx(ctx context.Context, arg CreateEncryptedTxParams) error {
-	_, err := q.db.Exec(ctx, createEncryptedTx,
-		arg.TxIndex,
-		arg.Eon,
-		arg.Tx,
-		arg.IdentityPreimage,
+func (q *Queries) CreateDecryptionKeysMessageDecryptionKey(ctx context.Context, arg CreateDecryptionKeysMessageDecryptionKeyParams) error {
+	_, err := q.db.Exec(ctx, createDecryptionKeysMessageDecryptionKey,
+		arg.DecryptionKeysMessageSlot,
+		arg.KeyIndex,
+		arg.DecryptionKeyEon,
+		arg.DecryptionKeyIdentityPreimage,
 	)
 	return err
 }
 
-const queryDecryptionData = `-- name: QueryDecryptionData :many
-SELECT eon, identity_preimage, decryption_key, slot, block_hash, created_at, updated_at FROM decryption_data
-WHERE eon = $1 AND identity_preimage = $2
+const createTransactionSubmittedEvent = `-- name: CreateTransactionSubmittedEvent :exec
+INSERT into transaction_submitted_event (
+    event_block_hash, 
+	event_block_number,
+	event_tx_index,
+	event_log_index,
+	eon,
+	tx_index,
+	identity_prefix,
+	sender,
+	encrypted_transaction
+) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT DO NOTHING
 `
 
-type QueryDecryptionDataParams struct {
-	Eon              int64
-	IdentityPreimage []byte
+type CreateTransactionSubmittedEventParams struct {
+	EventBlockHash       []byte
+	EventBlockNumber     int64
+	EventTxIndex         int64
+	EventLogIndex        int64
+	Eon                  int64
+	TxIndex              int64
+	IdentityPrefix       []byte
+	Sender               []byte
+	EncryptedTransaction []byte
 }
 
-func (q *Queries) QueryDecryptionData(ctx context.Context, arg QueryDecryptionDataParams) ([]DecryptionDatum, error) {
-	rows, err := q.db.Query(ctx, queryDecryptionData, arg.Eon, arg.IdentityPreimage)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []DecryptionDatum
-	for rows.Next() {
-		var i DecryptionDatum
-		if err := rows.Scan(
-			&i.Eon,
-			&i.IdentityPreimage,
-			&i.DecryptionKey,
-			&i.Slot,
-			&i.BlockHash,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg CreateTransactionSubmittedEventParams) error {
+	_, err := q.db.Exec(ctx, createTransactionSubmittedEvent,
+		arg.EventBlockHash,
+		arg.EventBlockNumber,
+		arg.EventTxIndex,
+		arg.EventLogIndex,
+		arg.Eon,
+		arg.TxIndex,
+		arg.IdentityPrefix,
+		arg.Sender,
+		arg.EncryptedTransaction,
+	)
+	return err
 }
 
 const queryDecryptionKeyShare = `-- name: QueryDecryptionKeyShare :many
@@ -171,57 +197,4 @@ func (q *Queries) QueryDecryptionKeyShare(ctx context.Context, arg QueryDecrypti
 		return nil, err
 	}
 	return items, nil
-}
-
-const queryEncryptedTx = `-- name: QueryEncryptedTx :many
-SELECT tx_index, eon, tx, identity_preimage, created_at, updated_at FROM encrypted_tx
-WHERE tx_index = $1 AND eon = $2
-`
-
-type QueryEncryptedTxParams struct {
-	TxIndex int64
-	Eon     int64
-}
-
-func (q *Queries) QueryEncryptedTx(ctx context.Context, arg QueryEncryptedTxParams) ([]EncryptedTx, error) {
-	rows, err := q.db.Query(ctx, queryEncryptedTx, arg.TxIndex, arg.Eon)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []EncryptedTx
-	for rows.Next() {
-		var i EncryptedTx
-		if err := rows.Scan(
-			&i.TxIndex,
-			&i.Eon,
-			&i.Tx,
-			&i.IdentityPreimage,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateBlockHash = `-- name: UpdateBlockHash :exec
-UPDATE decryption_data
-SET block_hash = $2
-WHERE slot = $1
-`
-
-type UpdateBlockHashParams struct {
-	Slot      int64
-	BlockHash []byte
-}
-
-func (q *Queries) UpdateBlockHash(ctx context.Context, arg UpdateBlockHashParams) error {
-	_, err := q.db.Exec(ctx, updateBlockHash, arg.Slot, arg.BlockHash)
-	return err
 }

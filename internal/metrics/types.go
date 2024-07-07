@@ -1,6 +1,10 @@
 package metrics
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"context"
+
+	"github.com/shutter-network/gnosh-metrics/internal/data"
+)
 
 type DecryptionData struct {
 	Key  []byte
@@ -20,9 +24,12 @@ type Tx struct {
 }
 
 type TxMapper interface {
-	AddEncryptedTx(txIndex int64, eon int64, identityPreimage []byte, encryptedTx []byte) error
-	AddDecryptionData(eon int64, identityPreimage []byte, dd *DecryptionData) error
-	AddKeyShare(eon int64, identityPreimage []byte, keyperIndex int64, ks *KeyShare) error
-	CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error)
-	AddBlockHash(slot int64, blockHash common.Hash) error
+	AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error
+	AddDecryptionKeyAndMessage(
+		ctx context.Context,
+		dk *data.DecryptionKey,
+		dkm *data.DecryptionKeysMessage,
+		dkmdk *data.DecryptionKeysMessageDecryptionKey,
+	) error
+	AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error
 }

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/stretchr/testify/suite"
@@ -16,8 +15,7 @@ import (
 type TestMetricsSuite struct {
 	suite.Suite
 
-	testDB    *common.TestDatabase
-	txManager *database.TxManager
+	testDB *common.TestDatabase
 
 	txMapper   metrics.TxMapper
 	txMapperDB metrics.TxMapper
@@ -40,10 +38,10 @@ func (s *TestMetricsSuite) SetupSuite() {
 	migrationsPath := curDir + "/../migrations"
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
-	s.txManager = database.NewTxManager(s.testDB.DbInstance)
+	// s.txManager = database.NewTxManager(s.testDB.DbInstance)
 
-	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.txManager)
-	s.dbQuery = data.New(s.txManager.GetDB(ctx))
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance)
+	s.dbQuery = data.New(s.testDB.DbInstance)
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {
