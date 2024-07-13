@@ -178,10 +178,15 @@ func getTxMapperImpl(ctx context.Context, config *common.Config) (metrics.TxMapp
 		if err != nil {
 			return nil, err
 		}
-		_, curFile, _, _ := runtime.Caller(0)
-		curDir := path.Dir(curFile)
 
-		migrationsPath := curDir + "/../../migrations"
+		migrationsPath := os.Getenv("MIGRATIONS_PATH")
+		if migrationsPath == "" {
+			// default to the relative path used in locally
+			_, curFile, _, _ := runtime.Caller(0)
+			curDir := path.Dir(curFile)
+			migrationsPath = curDir + "/../../migrations"
+		}
+
 		err = goose.RunContext(ctx, "up", migrationConn, migrationsPath)
 		if err != nil {
 			return nil, err
