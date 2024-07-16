@@ -16,11 +16,14 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
       - DB_SSL_MODE=${DB_SSL_MODE}
+      - P2P_BOOTSTRAP_ADDRESSES=${P2P_BOOTSTRAP_ADDRESSES}
+      - P2P_ENVIRONMENT=${P2P_ENVIRONMENT}
+      - P2P_DISCOVERY_NAMESPACE=${P2P_DISCOVERY_NAMESPACE}
     ports:
       - "8080:8080"
     networks:
       - app-network
-    command: ["./observer", "start", "--rpc-url", "wss://rpc.chiadochain.net/wss", "--p2pkey", "CAESQMl3XPvSPMdLdbVg0M3/5ZenGuk5+Ve0diP0i3F9WH76Xw3ax7KRmBm8CjOcv8FpfINtlW9NrIpsWjeliuGybew="]
+    command: ["./observer", "start", "--rpc-url", "wss://rpc.gnosischain.com/wss", "--p2pkey", "CAESQMl3XPvSPMdLdbVg0M3/5ZenGuk5+Ve0diP0i3F9WH76Xw3ax7KRmBm8CjOcv8FpfINtlW9NrIpsWjeliuGybew="]
 
   db:
     image: postgres:14.12
