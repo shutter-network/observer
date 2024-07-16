@@ -43,7 +43,6 @@ func Cmd() *cobra.Command {
 			bootstrapP2PAddresses := make([]*address.P2PAddress, len(bootstrapAddresses))
 
 			for i, addr := range bootstrapAddresses {
-				fmt.Println("addr", addr)
 				bootstrapP2PAddresses[i] = address.MustP2PAddress(addr)
 			}
 			config.P2P.CustomBootstrapAddresses = bootstrapP2PAddresses
