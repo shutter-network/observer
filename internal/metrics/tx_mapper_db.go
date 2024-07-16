@@ -101,7 +101,7 @@ func (tm *TxMapperDB) AddKeyShare(ctx context.Context, dks *data.DecryptionKeySh
 }
 
 func (tm *TxMapperDB) AddBlock(ctx context.Context, b *data.Block) error {
-	err := tm.dbQuery.CreateBlock(context.Background(), data.CreateBlockParams{
+	err := tm.dbQuery.CreateBlock(ctx, data.CreateBlockParams{
 		BlockHash:      b.BlockHash,
 		BlockNumber:    b.BlockNumber,
 		BlockTimestamp: b.BlockTimestamp,
