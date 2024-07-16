@@ -14,6 +14,7 @@ type TxMapperMemory struct {
 	DecryptionKeysMessageDecryptionKeys map[string]*data.DecryptionKeysMessageDecryptionKey
 	TransactionSubmittedEvents          map[string]*data.TransactionSubmittedEvent
 	DecryptionKeyShare                  map[string]*data.DecryptionKeyShare
+	Block                               map[string]*data.Block
 	mutex                               sync.Mutex
 }
 
@@ -24,6 +25,7 @@ func NewTxMapperMemory() TxMapper {
 		DecryptionKeysMessageDecryptionKeys: make(map[string]*data.DecryptionKeysMessageDecryptionKey),
 		TransactionSubmittedEvents:          make(map[string]*data.TransactionSubmittedEvent),
 		DecryptionKeyShare:                  make(map[string]*data.DecryptionKeyShare),
+		Block:                               make(map[string]*data.Block),
 		mutex:                               sync.Mutex{},
 	}
 }
@@ -63,6 +65,14 @@ func (tm *TxMapperMemory) AddKeyShare(ctx context.Context, dks *data.DecryptionK
 
 	key := createDecryptionKeyShareKey(dks.Eon, dks.IdentityPreimage, dks.KeyperIndex)
 	tm.DecryptionKeyShare[key] = dks
+	return nil
+}
+
+func (tm *TxMapperMemory) AddBlock(ctx context.Context, b *data.Block) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	tm.Block[string(b.BlockHash)] = b
 	return nil
 }
 

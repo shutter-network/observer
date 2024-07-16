@@ -5,10 +5,10 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
-func (dkw *P2PMsgsWatcher) handleKeyShareMsg(msg *p2pmsg.DecryptionKeyShares) ([]p2pmsg.Message, error) {
+func (pmw *P2PMsgsWatcher) handleKeyShareMsg(msg *p2pmsg.DecryptionKeyShares) ([]p2pmsg.Message, error) {
 	extra := msg.Extra.(*p2pmsg.DecryptionKeyShares_Gnosis).Gnosis
 
-	dkw.keyShareChannel <- &KeyShareEvent{
+	pmw.keyShareChannel <- &KeyShareEvent{
 		Eon:         int64(msg.Eon),
 		KeyperIndex: int64(msg.KeyperIndex),
 		Shares:      msg.Shares,

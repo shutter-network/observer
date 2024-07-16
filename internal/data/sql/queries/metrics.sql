@@ -56,3 +56,13 @@ ON CONFLICT DO NOTHING;
 -- name: QueryDecryptionKeyShare :many
 SELECT * FROM decryption_key_share
 WHERE eon = $1 AND identity_preimage = $2 AND keyper_index = $3;
+
+-- name: CreateBlock :exec
+INSERT into block(
+	block_hash,
+	block_number,
+	block_timestamp,
+	tx_hash
+) 
+VALUES ($1, $2, $3, $4) 
+ON CONFLICT DO NOTHING;

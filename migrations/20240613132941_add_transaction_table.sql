@@ -56,6 +56,16 @@ CREATE TABLE IF NOT EXISTS decryption_key_share
     updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
     PRIMARY KEY (eon, identity_preimage, keyper_index)
 );
+
+CREATE TABLE IF NOT EXISTS block
+(
+    block_hash          BYTEA PRIMARY KEY,
+    block_number        BIGINT UNIQUE NOT NULL,
+    block_timestamp     BIGINT UNIQUE NOT NULL,
+    tx_hash             BYTEA UNIQUE NOT NULL,
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
+    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL
+);
 -- +goose StatementEnd
 
 -- +goose Down
@@ -65,4 +75,6 @@ DROP TABLE decryption_key;
 DROP TABLE decryption_keys_message_decryption_key;
 DROP TABLE transaction_submitted_event;
 DROP TABLE decryption_key_share;
+DROP TABLE decryption_key_share;
+DROP TABLE block;
 -- +goose StatementEnd

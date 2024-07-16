@@ -100,6 +100,16 @@ func (tm *TxMapperDB) AddKeyShare(ctx context.Context, dks *data.DecryptionKeySh
 	return nil
 }
 
+func (tm *TxMapperDB) AddBlock(ctx context.Context, b *data.Block) error {
+	err := tm.dbQuery.CreateBlock(context.Background(), data.CreateBlockParams{
+		BlockHash:      b.BlockHash,
+		BlockNumber:    b.BlockNumber,
+		BlockTimestamp: b.BlockTimestamp,
+		TxHash:         b.TxHash,
+	})
+	return err
+}
+
 // func (tm *TxMapperDB) CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error) {
 // 	encryptedTx, err := tm.dbQuery.QueryEncryptedTx(context.Background(), data.QueryEncryptedTxParams{
 // 		TxIndex: txIndex,

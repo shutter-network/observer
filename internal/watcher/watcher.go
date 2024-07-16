@@ -62,17 +62,17 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	if err != nil {
 		return err
 	}
-	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
-	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
-	decryptionKeysWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, decryptionKeysWatcher); err != nil {
-		return err
-	}
-
 	txMapper, err := getTxMapperImpl(ctx, w.config)
 	if err != nil {
 		return err
 	}
+	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
+	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
+	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
+	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case txEvent := <-txSubmittedEventChannel:

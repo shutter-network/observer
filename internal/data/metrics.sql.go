@@ -9,6 +9,34 @@ import (
 	"context"
 )
 
+const createBlock = `-- name: CreateBlock :exec
+INSERT into block(
+	block_hash,
+	block_number,
+	block_timestamp,
+	tx_hash
+) 
+VALUES ($1, $2, $3, $4) 
+ON CONFLICT DO NOTHING
+`
+
+type CreateBlockParams struct {
+	BlockHash      []byte
+	BlockNumber    int64
+	BlockTimestamp int64
+	TxHash         []byte
+}
+
+func (q *Queries) CreateBlock(ctx context.Context, arg CreateBlockParams) error {
+	_, err := q.db.Exec(ctx, createBlock,
+		arg.BlockHash,
+		arg.BlockNumber,
+		arg.BlockTimestamp,
+		arg.TxHash,
+	)
+	return err
+}
+
 const createDecryptionKey = `-- name: CreateDecryptionKey :exec
 INSERT into decryption_key(
     eon,

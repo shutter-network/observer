@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Block struct {
+	BlockHash      []byte
+	BlockNumber    int64
+	BlockTimestamp int64
+	TxHash         []byte
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type DecryptionKey struct {
 	Eon              int64
 	IdentityPreimage []byte
