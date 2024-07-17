@@ -31,7 +31,7 @@ func (pmw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 					Uint64("slot", extra.Slot).
 					Uint64("expected-slot", mostRecentSlot+1).
 					Uint64("most-recent-block", pmw.mostRecentBlock).
-					Msg("received keys for a slot greater then expected slot")
+					Msg("received keys for a slot greater than expected slot")
 			}
 			log.Info().
 				Uint64("slot", extra.Slot).

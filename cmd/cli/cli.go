@@ -66,21 +66,22 @@ func Cmd() *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringVarP(
+	cmd.PersistentFlags().StringVar(
 		&config.RpcURL,
 		"rpc-url",
 		"",
-		"wss://rpc.chiadochain.net/wss",
 		"gnosis websocket rpc url",
 	)
 
-	cmd.PersistentFlags().StringVarP(
+	cmd.MarkPersistentFlagRequired("rpc-url")
+
+	cmd.PersistentFlags().StringVar(
 		&config.ContractAddress,
 		"contract-address",
 		"",
-		"0xd073BD5A717Dce1832890f2Fdd9F4fBC4555e41A",
 		"sequencer contract address",
 	)
+	cmd.MarkPersistentFlagRequired("contract-address")
 
 	cmd.PersistentFlags().BoolVar(
 		&config.NoDB,
@@ -91,7 +92,7 @@ func Cmd() *cobra.Command {
 
 	cmd.PersistentFlags().String("p2pkey", "", "P2P key value (base64 encoded)")
 	viper.BindPFlag("p2pkey", cmd.PersistentFlags().Lookup("p2pkey"))
-
+	cmd.MarkPersistentFlagRequired("p2pkey")
 	return cmd
 }
 

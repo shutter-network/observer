@@ -20,7 +20,7 @@ services:
       - "8080:8080"
     networks:
       - app-network
-    command: ["./observer", "start", "--rpc-url", "${RPC_URL}", "--p2pkey", "${P2P_KEY}"]
+    command: ["./observer", "start", "--rpc-url", "${RPC_URL}", "--contract-address", "${CONTRACT_ADDRESS}", "--p2pkey", "${P2P_KEY}"]
 
   db:
     image: postgres:14.12

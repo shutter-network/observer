@@ -15,4 +15,4 @@ COPY --from=builder /app/observer .
 COPY --from=builder /app/migrations /root/migrations
 ENV MIGRATIONS_PATH=/root/migrations
 EXPOSE 8080
-CMD ["./observer", "start", "--rpc-url", "$RPC_URL", "--p2pkey", "$P2P_KEY"]
+CMD ["./observer", "start", "--rpc-url", "$RPC_URL", "--contract-address", "$CONTRACT_ADDRESS", "--p2pkey", "$P2P_KEY"]
