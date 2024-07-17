@@ -1,12 +1,12 @@
 package tests
 
 import (
+	"context"
 	"path"
 	"runtime"
 	"testing"
 
 	"github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/stretchr/testify/suite"
@@ -15,14 +15,11 @@ import (
 type TestMetricsSuite struct {
 	suite.Suite
 
-	testDB    *common.TestDatabase
-	txManager *database.TxManager
+	testDB *common.TestDatabase
 
-	txMapper           metrics.TxMapper
-	txMapperDB         metrics.TxMapper
-	encryptedTxRepo    *data.EncryptedTxRepo
-	decryptionDataRepo *data.DecryptionDataRepo
-	keyShareRepo       *data.KeyShareRepo
+	txMapper   metrics.TxMapper
+	txMapperDB metrics.TxMapper
+	dbQuery    *data.Queries
 }
 
 func TestMain(t *testing.T) {
@@ -34,18 +31,17 @@ func (s *TestMetricsSuite) TearDownAllSuite() {
 }
 
 func (s *TestMetricsSuite) SetupSuite() {
+	ctx := context.Background()
 	_, curFile, _, _ := runtime.Caller(0)
 	curDir := path.Dir(curFile)
 
 	migrationsPath := curDir + "/../migrations"
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
-	s.txManager = database.NewTxManager(s.testDB.DbInstance)
-	s.encryptedTxRepo = data.NewEncryptedTxRepository(s.testDB.DbInstance)
-	s.decryptionDataRepo = data.NewDecryptionDataRepository(s.testDB.DbInstance)
-	s.keyShareRepo = data.NewKeyShareRepository(s.testDB.DbInstance)
+	// s.txManager = database.NewTxManager(s.testDB.DbInstance)
 
-	s.txMapperDB = metrics.NewTxMapperDB(s.encryptedTxRepo, s.decryptionDataRepo, s.keyShareRepo, s.txManager)
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance)
+	s.dbQuery = data.New(s.testDB.DbInstance)
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {

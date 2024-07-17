@@ -7,6 +7,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2p"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
@@ -21,16 +22,23 @@ type P2PMsgsWatcher struct {
 	recentBlocksMux sync.Mutex
 	recentBlocks    map[uint64]*BlockReceivedEvent
 	mostRecentBlock uint64
+
+	txMapper metrics.TxMapper
 }
 
 type DecryptionKeysEvent struct {
-	Keys []*p2pmsg.Key
-	Slot uint64
+	Eon        int64
+	Keys       []*p2pmsg.Key
+	Slot       int64
+	InstanceID int64
+	TxPointer  int64
 }
 
 type KeyShareEvent struct {
-	Shares []*p2pmsg.KeyShare
-	Slot   uint64
+	Eon         int64
+	KeyperIndex int64
+	Shares      []*p2pmsg.KeyShare
+	Slot        int64
 }
 
 func NewP2PMsgsWatcherWatcher(
@@ -38,6 +46,7 @@ func NewP2PMsgsWatcherWatcher(
 	blocksChannel chan *BlockReceivedEvent,
 	decryptionDataChannel chan *DecryptionKeysEvent,
 	keyShareChannel chan *KeyShareEvent,
+	txMapper metrics.TxMapper,
 ) *P2PMsgsWatcher {
 	return &P2PMsgsWatcher{
 		config:                config,
@@ -47,36 +56,37 @@ func NewP2PMsgsWatcherWatcher(
 		recentBlocksMux:       sync.Mutex{},
 		recentBlocks:          make(map[uint64]*BlockReceivedEvent),
 		mostRecentBlock:       0,
+		txMapper:              txMapper,
 	}
 }
 
-func (dkw *P2PMsgsWatcher) Start(ctx context.Context, runner service.Runner) error {
-	p2pService, err := p2p.New(dkw.config.P2P)
+func (pmw *P2PMsgsWatcher) Start(ctx context.Context, runner service.Runner) error {
+	p2pService, err := p2p.New(pmw.config.P2P)
 	if err != nil {
 		return err
 	}
-	p2pService.AddMessageHandler(dkw)
+	p2pService.AddMessageHandler(pmw)
 
-	runner.Go(func() error { return dkw.insertBlocks(ctx) })
+	runner.Go(func() error { return pmw.insertBlocks(ctx) })
 
 	return runner.StartService(p2pService)
 }
 
-func (dkw *P2PMsgsWatcher) MessagePrototypes() []p2pmsg.Message {
+func (pmw *P2PMsgsWatcher) MessagePrototypes() []p2pmsg.Message {
 	return []p2pmsg.Message{
 		&p2pmsg.DecryptionKeys{},
 		&p2pmsg.DecryptionKeyShares{},
 	}
 }
 
-func (dkw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.Message) (pubsub.ValidationResult, error) {
+func (pmw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.Message) (pubsub.ValidationResult, error) {
 	switch msg := msgUntyped.(type) {
 	case *p2pmsg.DecryptionKeys:
 		extra := msg.Extra.(*p2pmsg.DecryptionKeys_Gnosis).Gnosis
 		if extra == nil {
 			log.Warn().
 				Int("num-keys", len(msg.Keys)).
-				Uint64("most-recent-block", dkw.mostRecentBlock).
+				Uint64("most-recent-block", pmw.mostRecentBlock).
 				Msg("received DecryptionKeys without any slot")
 			return pubsub.ValidationReject, nil
 		}
@@ -85,7 +95,7 @@ func (dkw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.
 		if extra == nil {
 			log.Warn().
 				Int("num-keyshares", len(msg.Shares)).
-				Uint64("most-recent-block", dkw.mostRecentBlock).
+				Uint64("most-recent-block", pmw.mostRecentBlock).
 				Msg("received DecryptionKeyShares without any slot")
 			return pubsub.ValidationReject, nil
 		}
@@ -93,12 +103,12 @@ func (dkw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.
 	return pubsub.ValidationAccept, nil
 }
 
-func (dkw *P2PMsgsWatcher) HandleMessage(ctx context.Context, msgUntyped p2pmsg.Message) ([]p2pmsg.Message, error) {
+func (pmw *P2PMsgsWatcher) HandleMessage(ctx context.Context, msgUntyped p2pmsg.Message) ([]p2pmsg.Message, error) {
 	switch msg := msgUntyped.(type) {
 	case *p2pmsg.DecryptionKeys:
-		return dkw.handleDecryptionKeyMsg(msg)
+		return pmw.handleDecryptionKeyMsg(msg)
 	case *p2pmsg.DecryptionKeyShares:
-		return dkw.handleKeyShareMsg(msg)
+		return pmw.handleKeyShareMsg(msg)
 	}
 	return []p2pmsg.Message{}, nil
 }

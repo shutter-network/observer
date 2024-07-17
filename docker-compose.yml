@@ -1,0 +1,59 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gnosh-observer
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=shutter_metrics
+      - DB_SSL_MODE=disable
+      - P2P_BOOTSTRAP_ADDRESSES=${P2P_BOOTSTRAP_ADDRESSES}
+      - P2P_ENVIRONMENT=${P2P_ENVIRONMENT}
+      - P2P_DISCOVERY_NAMESPACE=${P2P_DISCOVERY_NAMESPACE}
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    command: ["./observer", "start", "--rpc-url", "${RPC_URL}", "--contract-address", "${CONTRACT_ADDRESS}", "--p2pkey", "${P2P_KEY}"]
+
+  db:
+    image: postgres:14.12
+    container_name: postgres-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=shutter_metrics
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  pgdata:

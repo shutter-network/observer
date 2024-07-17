@@ -5,101 +5,42 @@ import (
 	cryptoRand "crypto/rand"
 	"math/rand"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 )
 
 func (s *TestMetricsSuite) TestEncryptedTransaction() {
 	ectx, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	identityPreimage, err := generateRandomBytes(32)
-	s.Require().NoError(err)
-
-	tx, err := s.encryptedTxRepo.CreateEncryptedTx(context.Background(), &data.EncryptedTxV1{
-		Tx:               ectx,
-		IdentityPreimage: identityPreimage,
-	})
-	s.Require().NoError(err)
-	s.Require().NotNil(tx)
-
-	s.Require().Equal(tx.Tx, ectx)
-	s.Require().Equal(tx.IdentityPreimage, identityPreimage)
-}
-
-func (s *TestMetricsSuite) TestQueryEncryptedTransaction() {
-	ectx, err := generateRandomBytes(32)
-	s.Require().NoError(err)
-
-	identityPreimage, err := generateRandomBytes(32)
-	s.Require().NoError(err)
-
-	tx, err := s.encryptedTxRepo.CreateEncryptedTx(context.Background(), &data.EncryptedTxV1{
-		Tx:               ectx,
-		IdentityPreimage: identityPreimage,
-	})
-	s.Require().NoError(err)
-	s.Require().NotNil(tx)
-
-	s.Require().Equal(tx.Tx, ectx)
-	s.Require().Equal(tx.IdentityPreimage, identityPreimage)
-
-	txs, err := s.encryptedTxRepo.QueryEncryptedTx(context.Background(), &data.QueryEncryptedTx{
-		IdentityPreimages: [][]byte{identityPreimage},
-	})
-	s.Require().NoError(err)
-	s.Require().Equal(len(txs), 1)
-	s.Require().Equal(txs[0].Tx, ectx)
-	s.Require().Equal(txs[0].IdentityPreimage, identityPreimage)
-
-}
-
-func (s *TestMetricsSuite) TestUpdateBlockHashTransaction() {
-	slot := rand.Int63()
-	ectx, err := generateRandomBytes(32)
-	s.Require().NoError(err)
-	dk, err := generateRandomBytes(32)
-	s.Require().NoError(err)
-	blockHash, err := generateRandomBytes(32)
-	s.Require().NoError(err)
-
 	ctx := context.Background()
-	identityPreimage, err := generateRandomBytes(32)
+	txIndex := rand.Int63()
+	eon := rand.Int63()
+	eventBlockHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
-	tx, err := s.encryptedTxRepo.CreateEncryptedTx(ctx, &data.EncryptedTxV1{
-		Tx:               ectx,
-		IdentityPreimage: identityPreimage,
+	eventBlockNumber := rand.Int63()
+	eventTxIndex := rand.Int63()
+	eventLogIndex := rand.Int63()
+	identityPrefix, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	sender, err := generateRandomBytes(20)
+	s.Require().NoError(err)
+
+	err = s.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+		TxIndex:              txIndex,
+		Eon:                  eon,
+		EventBlockHash:       eventBlockHash,
+		EventBlockNumber:     eventBlockNumber,
+		EventTxIndex:         eventTxIndex,
+		EventLogIndex:        eventLogIndex,
+		IdentityPrefix:       identityPrefix,
+		Sender:               sender,
+		EncryptedTransaction: ectx,
 	})
 	s.Require().NoError(err)
-	s.Require().NotNil(tx)
-
-	s.Require().Equal(tx.Tx, ectx)
-	s.Require().Equal(tx.IdentityPreimage, identityPreimage)
-
-	dd, err := s.decryptionDataRepo.CreateDecryptionData(ctx, &data.DecryptionDataV1{
-		Key:              dk,
-		Slot:             slot,
-		IdentityPreimage: identityPreimage,
-	})
-	s.Require().NoError(err)
-	s.Require().NotNil(dd)
-
-	dds, err := s.decryptionDataRepo.QueryDecryptionData(ctx, &data.QueryDecryptionData{
-		IdentityPreimages: [][]byte{identityPreimage},
-	})
-	s.Require().NoError(err)
-
-	dds[0].BlockHash = blockHash
-	updTx, err := s.decryptionDataRepo.UpdateDecryptionData(ctx, dds[0])
-
-	s.Require().NoError(err)
-	s.Require().Equal(updTx.Key, dk)
-	s.Require().Equal(updTx.Slot, slot)
-	s.Require().Equal(updTx.BlockHash, blockHash)
 }
 
 func (s *TestMetricsSuite) TestAddDecryptionData() {
+	ctx := context.Background()
 	slot := rand.Int63()
 	dk, err := generateRandomBytes(32)
 	s.Require().NoError(err)
@@ -107,24 +48,31 @@ func (s *TestMetricsSuite) TestAddDecryptionData() {
 	identityPreimage, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddDecryptionData(identityPreimage, &metrics.DecryptionData{
-		Key:  dk,
-		Slot: uint64(slot),
+	eon := rand.Int63()
+
+	instanceID := rand.Int63()
+	txPointer := rand.Int63()
+
+	err = s.txMapperDB.AddDecryptionKeyAndMessage(ctx, &data.DecryptionKey{
+		Eon:              eon,
+		IdentityPreimage: identityPreimage,
+		Key:              dk,
+	}, &data.DecryptionKeysMessage{
+		Slot:       slot,
+		InstanceID: instanceID,
+		Eon:        eon,
+		TxPointer:  txPointer,
+	}, &data.DecryptionKeysMessageDecryptionKey{
+		DecryptionKeysMessageSlot:     slot,
+		KeyIndex:                      0,
+		DecryptionKeyEon:              eon,
+		DecryptionKeyIdentityPreimage: identityPreimage,
 	})
 	s.Require().NoError(err)
-
-	dd, err := s.decryptionDataRepo.QueryDecryptionData(context.Background(), &data.QueryDecryptionData{
-		IdentityPreimages: [][]byte{identityPreimage},
-	})
-	s.Require().NoError(err)
-
-	s.Require().Equal(len(dd), 1)
-	s.Require().Equal(dd[0].Key, dk)
-	s.Require().Equal(dd[0].Slot, slot)
-	s.Require().Equal(dd[0].IdentityPreimage, identityPreimage)
 }
 
 func (s *TestMetricsSuite) TestAddKeyShare() {
+	ctx := context.Background()
 	slot := rand.Int63()
 	ks, err := generateRandomBytes(32)
 	s.Require().NoError(err)
@@ -132,24 +80,33 @@ func (s *TestMetricsSuite) TestAddKeyShare() {
 	identityPreimage, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddKeyShare(identityPreimage, &metrics.KeyShare{
-		Share: ks,
-		Slot:  uint64(slot),
+	eon := rand.Int63()
+	keyperIndex := rand.Int63()
+	err = s.txMapperDB.AddKeyShare(ctx, &data.DecryptionKeyShare{
+		Eon:                eon,
+		IdentityPreimage:   identityPreimage,
+		KeyperIndex:        keyperIndex,
+		DecryptionKeyShare: ks,
+		Slot:               slot,
 	})
 	s.Require().NoError(err)
 
-	k, err := s.keyShareRepo.QueryKeyShares(context.Background(), &data.QueryKeyShares{
-		IdentityPreimages: [][]byte{identityPreimage},
+	k, err := s.dbQuery.QueryDecryptionKeyShare(context.Background(), data.QueryDecryptionKeyShareParams{
+		Eon:              eon,
+		IdentityPreimage: identityPreimage,
+		KeyperIndex:      keyperIndex,
 	})
 	s.Require().NoError(err)
 
 	s.Require().Equal(len(k), 1)
-	s.Require().Equal(k[0].KeyShare, ks)
+	s.Require().Equal(k[0].DecryptionKeyShare, ks)
 	s.Require().Equal(k[0].Slot, slot)
 	s.Require().Equal(k[0].IdentityPreimage, identityPreimage)
 }
 
 func (s *TestMetricsSuite) TestAddFullTransaction() {
+	ctx := context.Background()
+
 	slot := rand.Int63()
 	ectx, err := generateRandomBytes(32)
 	s.Require().NoError(err)
@@ -157,27 +114,62 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 	s.Require().NoError(err)
 	ks, err := generateRandomBytes(32)
 	s.Require().NoError(err)
-	blockHash, err := generateRandomBytes(32)
-	s.Require().NoError(err)
 	identityPreimage, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddEncryptedTx(identityPreimage, ectx)
-	s.Require().NoError(err)
+	eon := rand.Int63()
+	txIndex := rand.Int63()
+	keyperIndex := rand.Int63()
 
-	err = s.txMapperDB.AddKeyShare(identityPreimage, &metrics.KeyShare{
-		Share: ks,
-		Slot:  uint64(slot),
+	eventBlockHash, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	eventBlockNumber := rand.Int63()
+	eventTxIndex := rand.Int63()
+	eventLogIndex := rand.Int63()
+	identityPrefix, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+	sender, err := generateRandomBytes(20)
+	s.Require().NoError(err)
+	instanceID := rand.Int63()
+	txPointer := rand.Int63()
+
+	err = s.txMapperDB.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
+		EventBlockHash:       eventBlockHash,
+		EventBlockNumber:     eventBlockNumber,
+		EventTxIndex:         eventTxIndex,
+		EventLogIndex:        eventLogIndex,
+		Eon:                  eon,
+		TxIndex:              txIndex,
+		IdentityPrefix:       identityPrefix,
+		Sender:               sender,
+		EncryptedTransaction: ectx,
 	})
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddDecryptionData(identityPreimage, &metrics.DecryptionData{
-		Key:  dk,
-		Slot: uint64(slot),
+	err = s.txMapperDB.AddKeyShare(ctx, &data.DecryptionKeyShare{
+		Eon:                eon,
+		IdentityPreimage:   identityPreimage,
+		KeyperIndex:        keyperIndex,
+		DecryptionKeyShare: ks,
+		Slot:               slot,
 	})
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddBlockHash(uint64(slot), common.Hash(blockHash))
+	err = s.txMapperDB.AddDecryptionKeyAndMessage(ctx, &data.DecryptionKey{
+		Eon:              eon,
+		IdentityPreimage: identityPreimage,
+		Key:              dk,
+	}, &data.DecryptionKeysMessage{
+		Slot:       slot,
+		InstanceID: instanceID,
+		Eon:        eon,
+		TxPointer:  txPointer,
+	}, &data.DecryptionKeysMessageDecryptionKey{
+		DecryptionKeysMessageSlot:     slot,
+		KeyIndex:                      0,
+		DecryptionKeyEon:              eon,
+		DecryptionKeyIdentityPreimage: identityPreimage,
+	})
 	s.Require().NoError(err)
 }
 

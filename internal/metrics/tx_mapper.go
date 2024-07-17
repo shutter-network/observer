@@ -1,87 +1,93 @@
 package metrics
 
 import (
-	"encoding/hex"
-	"errors"
+	"context"
+	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
 
 type TxMapperMemory struct {
-	Data  map[string]*Tx
-	mutex sync.Mutex
+	DecryptionKeysMessages              map[int64]*data.DecryptionKeysMessage
+	DecryptionKeys                      map[string]*data.DecryptionKey
+	DecryptionKeysMessageDecryptionKeys map[string]*data.DecryptionKeysMessageDecryptionKey
+	TransactionSubmittedEvents          map[string]*data.TransactionSubmittedEvent
+	DecryptionKeyShare                  map[string]*data.DecryptionKeyShare
+	Block                               map[string]*data.Block
+	mutex                               sync.Mutex
 }
 
 func NewTxMapperMemory() TxMapper {
 	return &TxMapperMemory{
-		Data:  make(map[string]*Tx),
-		mutex: sync.Mutex{},
+		DecryptionKeysMessages:              make(map[int64]*data.DecryptionKeysMessage),
+		DecryptionKeys:                      make(map[string]*data.DecryptionKey),
+		DecryptionKeysMessageDecryptionKeys: make(map[string]*data.DecryptionKeysMessageDecryptionKey),
+		TransactionSubmittedEvents:          make(map[string]*data.TransactionSubmittedEvent),
+		DecryptionKeyShare:                  make(map[string]*data.DecryptionKeyShare),
+		Block:                               make(map[string]*data.Block),
+		mutex:                               sync.Mutex{},
 	}
 }
 
-func (tm *TxMapperMemory) AddEncryptedTx(identityPreimage []byte, encryptedTx []byte) error {
+func (tm *TxMapperMemory) AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tx, exists := tm.Data[hex.EncodeToString(identityPreimage)]
-	if !exists {
-		tx = &Tx{}
-		tm.Data[hex.EncodeToString(identityPreimage)] = tx
-	}
-	tx.EncryptedTx = encryptedTx
+	key := createTransactionSubmittedEventKey(tse.EventBlockHash, tse.EventBlockNumber, tse.EventTxIndex, tse.EventLogIndex)
+	tm.TransactionSubmittedEvents[key] = tse
 	return nil
 }
 
-func (tm *TxMapperMemory) AddDecryptionData(identityPreimage []byte, dd *DecryptionData) error {
+func (tm *TxMapperMemory) AddDecryptionKeyAndMessage(
+	ctx context.Context,
+	dk *data.DecryptionKey,
+	dkm *data.DecryptionKeysMessage,
+	dkmdk *data.DecryptionKeysMessageDecryptionKey,
+) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tx, exists := tm.Data[hex.EncodeToString(identityPreimage)]
-	if !exists {
-		tx = &Tx{}
-		tm.Data[hex.EncodeToString(identityPreimage)] = tx
-	}
-	tx.DD = dd
+	tm.DecryptionKeysMessages[dkm.Slot] = dkm
+
+	dkKey := createDecryptionKeyKey(dk.Eon, dk.IdentityPreimage)
+	tm.DecryptionKeys[dkKey] = dk
+
+	dkmdkKey := createDecryptionKeysMessageDecryptionKeyKey(dkmdk.DecryptionKeysMessageSlot, dkmdk.DecryptionKeyEon, dkmdk.DecryptionKeyIdentityPreimage, dkmdk.KeyIndex)
+	tm.DecryptionKeysMessageDecryptionKeys[dkmdkKey] = dkmdk
+
 	return nil
 }
 
-func (tm *TxMapperMemory) AddKeyShare(identityPreimage []byte, ks *KeyShare) error {
+func (tm *TxMapperMemory) AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tx, exists := tm.Data[hex.EncodeToString(identityPreimage)]
-	if !exists {
-		tx = &Tx{}
-		tm.Data[hex.EncodeToString(identityPreimage)] = tx
-	}
-	tx.KS = ks
+	key := createDecryptionKeyShareKey(dks.Eon, dks.IdentityPreimage, dks.KeyperIndex)
+	tm.DecryptionKeyShare[key] = dks
 	return nil
 }
 
-func (tm *TxMapperMemory) AddBlockHash(slot uint64, blockHash common.Hash) error {
-	for _, val := range tm.Data {
-		if val.DD.Slot == slot {
-			val.BlockHash = blockHash.Bytes()
-			return nil
-		}
-	}
+func (tm *TxMapperMemory) AddBlock(ctx context.Context, b *data.Block) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	tm.Block[string(b.BlockHash)] = b
 	return nil
 }
 
-func (tm *TxMapperMemory) CanBeDecrypted(identityPreimage []byte) (bool, error) {
-	tx, exists := tm.Data[hex.EncodeToString(identityPreimage)]
-	if !exists {
-		return false, nil
-	}
-	return len(tx.EncryptedTx) > 0 && tx.DD != nil, nil
+func createTransactionSubmittedEventKey(eventBlockHash []byte, eventBlockNumber int64, eventTxIndex int64, eventLogIndex int64) string {
+	return fmt.Sprintf("%x_%d_%d_%d", eventBlockHash, eventBlockNumber, eventTxIndex, eventLogIndex)
 }
 
-func (tm *TxMapperMemory) RemoveTx(identityPreimage []byte) error {
-	if canBe, _ := tm.CanBeDecrypted(identityPreimage); !canBe {
-		return errors.New("unable to remove Tx which cant be decrypted")
-	}
+func createDecryptionKeyKey(eon int64, identityPreimage []byte) string {
+	return fmt.Sprintf("%d_%x", eon, identityPreimage)
+}
 
-	delete(tm.Data, hex.EncodeToString(identityPreimage))
-	return nil
+func createDecryptionKeysMessageDecryptionKeyKey(slot int64, eon int64, identityPreimage []byte, keyIndex int64) string {
+	return fmt.Sprintf("%d_%d_%x_%d", slot, eon, identityPreimage, keyIndex)
+}
+
+func createDecryptionKeyShareKey(eon int64, identityPreimage []byte, keyperIndex int64) string {
+	return fmt.Sprintf("%d_%x_%d", eon, identityPreimage, keyperIndex)
 }
