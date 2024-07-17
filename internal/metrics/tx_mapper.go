@@ -76,14 +76,6 @@ func (tm *TxMapperMemory) AddBlock(ctx context.Context, b *data.Block) error {
 	return nil
 }
 
-// func (tm *TxMapperMemory) CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error) {
-// 	tx, exists := tm.Data[hex.EncodeToString(identityPreimage)]
-// 	if !exists {
-// 		return false, nil
-// 	}
-// 	return len(tx.EncryptedTx) > 0 && tx.DD != nil, nil
-// }
-
 func createTransactionSubmittedEventKey(eventBlockHash []byte, eventBlockNumber int64, eventTxIndex int64, eventLogIndex int64) string {
 	return fmt.Sprintf("%x_%d_%d_%d", eventBlockHash, eventBlockNumber, eventTxIndex, eventLogIndex)
 }

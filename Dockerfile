@@ -15,4 +15,4 @@ COPY --from=builder /app/observer .
 COPY --from=builder /app/migrations /root/migrations
 ENV MIGRATIONS_PATH=/root/migrations
 EXPOSE 8080
-CMD ["./observer", "start", "--rpc-url", "wss://rpc.gnosischain.com/wss", "--p2pkey", "CAESQMl3XPvSPMdLdbVg0M3/5ZenGuk5+Ve0diP0i3F9WH76Xw3ax7KRmBm8CjOcv8FpfINtlW9NrIpsWjeliuGybew="]
+CMD ["./observer", "start", "--rpc-url", "$RPC_URL", "--p2pkey", "$P2P_KEY"]

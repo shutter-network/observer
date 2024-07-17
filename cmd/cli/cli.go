@@ -47,12 +47,12 @@ func Cmd() *cobra.Command {
 			}
 			config.P2P.CustomBootstrapAddresses = bootstrapP2PAddresses
 			config.P2P.ListenAddresses = []*address.P2PAddress{
-				address.MustP2PAddress("/ip4/0.0.0.0/tcp/0"),
-				address.MustP2PAddress("/ip4/0.0.0.0/udp/0/quic-v1"),
-				address.MustP2PAddress("/ip4/0.0.0.0/udp/0/quic-v1/webtransport"),
-				address.MustP2PAddress("/ip6/::/tcp/0"),
-				address.MustP2PAddress("/ip6/::/udp/0/quic-v1"),
-				address.MustP2PAddress("/ip6/::/udp/0/quic-v1/webtransport"),
+				address.MustP2PAddress("/ip4/0.0.0.0/tcp/23003"),
+				address.MustP2PAddress("/ip4/0.0.0.0/udp/23003/quic-v1"),
+				address.MustP2PAddress("/ip4/0.0.0.0/udp/23003/quic-v1/webtransport"),
+				address.MustP2PAddress("/ip6/::/tcp/23003"),
+				address.MustP2PAddress("/ip6/::/udp/23003/quic-v1"),
+				address.MustP2PAddress("/ip6/::/udp/23003/quic-v1/webtransport"),
 			}
 
 			p2pEnviroment, err := strconv.ParseInt(os.Getenv("P2P_ENVIRONMENT"), 10, 0)

@@ -109,26 +109,3 @@ func (tm *TxMapperDB) AddBlock(ctx context.Context, b *data.Block) error {
 	})
 	return err
 }
-
-// func (tm *TxMapperDB) CanBeDecrypted(txIndex int64, eon int64, identityPreimage []byte) (bool, error) {
-// 	encryptedTx, err := tm.dbQuery.QueryEncryptedTx(context.Background(), data.QueryEncryptedTxParams{
-// 		TxIndex: txIndex,
-// 		Eon:     eon,
-// 	})
-// 	if err != nil {
-// 		return false, fmt.Errorf("error querying encrypted transaction: %w", err)
-// 	}
-
-// 	decryptionData, err := tm.dbQuery.QueryDecryptionData(context.Background(), data.QueryDecryptionDataParams{
-// 		Eon:              eon,
-// 		IdentityPreimage: identityPreimage,
-// 	})
-// 	if err != nil {
-// 		return false, fmt.Errorf("error querying decryption data: %w", err)
-// 	}
-
-// 	if len(encryptedTx) == 0 || len(decryptionData) == 0 {
-// 		return false, nil
-// 	}
-// 	return true, nil
-// }

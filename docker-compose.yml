@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -8,14 +6,13 @@ services:
     container_name: gnosh-observer
     depends_on:
       - db
-      - prometheus
     environment:
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_USER=${DB_USER}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_SSL_MODE=${DB_SSL_MODE}
+      - DB_NAME=shutter_metrics
+      - DB_SSL_MODE=disable
       - P2P_BOOTSTRAP_ADDRESSES=${P2P_BOOTSTRAP_ADDRESSES}
       - P2P_ENVIRONMENT=${P2P_ENVIRONMENT}
       - P2P_DISCOVERY_NAMESPACE=${P2P_DISCOVERY_NAMESPACE}
@@ -23,15 +20,15 @@ services:
       - "8080:8080"
     networks:
       - app-network
-    command: ["./observer", "start", "--rpc-url", "wss://rpc.gnosischain.com/wss", "--p2pkey", "CAESQMl3XPvSPMdLdbVg0M3/5ZenGuk5+Ve0diP0i3F9WH76Xw3ax7KRmBm8CjOcv8FpfINtlW9NrIpsWjeliuGybew="]
+    command: ["./observer", "start", "--rpc-url", "${RPC_URL}", "--p2pkey", "${P2P_KEY}"]
 
   db:
     image: postgres:14.12
     container_name: postgres-db
     environment:
-      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_DB=shutter_metrics
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
