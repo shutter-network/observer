@@ -112,5 +112,5 @@ func Start() error {
 	}
 	watcher := watcher.New(&config)
 	services = append(services, watcher)
-	return service.Run(ctx, services...)
+	return service.RunWithSighandler(ctx, services...)
 }
