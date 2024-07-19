@@ -72,79 +72,83 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher); err != nil {
 		return err
 	}
-
-	for {
-		select {
-		case txEvent := <-txSubmittedEventChannel:
-			err := txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
-				EventBlockHash:       txEvent.Raw.BlockHash[:],
-				EventBlockNumber:     int64(txEvent.Raw.BlockNumber),
-				EventTxIndex:         int64(txEvent.Raw.TxIndex),
-				EventLogIndex:        int64(txEvent.Raw.Index),
-				Eon:                  int64(txEvent.Eon),
-				TxIndex:              int64(txEvent.TxIndex),
-				IdentityPrefix:       txEvent.IdentityPrefix[:],
-				Sender:               txEvent.Sender[:],
-				EncryptedTransaction: txEvent.EncryptedTransaction,
-			})
-			if err != nil {
-				log.Err(err).Msg("err adding encrypting transaction")
-				return err
-			}
-			log.Info().
-				Bytes("encrypted transaction", txEvent.EncryptedTransaction).
-				Msg("new encrypted transaction")
-		case dd := <-decryptionDataChannel:
-			for index, key := range dd.Keys {
-				err := txMapper.AddDecryptionKeyAndMessage(
-					ctx,
-					&data.DecryptionKey{
-						Eon:              dd.Eon,
-						IdentityPreimage: key.Identity,
-						Key:              key.Key,
-					},
-					&data.DecryptionKeysMessage{
-						Slot:       dd.Slot,
-						InstanceID: dd.InstanceID,
-						Eon:        dd.Eon,
-						TxPointer:  dd.TxPointer,
-					},
-					&data.DecryptionKeysMessageDecryptionKey{
-						DecryptionKeysMessageSlot:     dd.Slot,
-						KeyIndex:                      int64(index),
-						DecryptionKeyEon:              dd.Eon,
-						DecryptionKeyIdentityPreimage: key.Identity,
-					},
-				)
-				if err != nil {
-					log.Err(err).Msg("err adding decryption data")
-					return err
-				}
-				log.Info().
-					Bytes("decryption keys", key.Key).
-					Int64("slot", dd.Slot).
-					Msg("new decryption key")
-			}
-		case ks := <-keyShareChannel:
-			for _, share := range ks.Shares {
-				err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
-					Eon:                ks.Eon,
-					IdentityPreimage:   share.EpochID,
-					KeyperIndex:        ks.KeyperIndex,
-					DecryptionKeyShare: share.Share,
-					Slot:               ks.Slot,
+	runner.Go(func() error {
+		for {
+			select {
+			case txEvent := <-txSubmittedEventChannel:
+				err := txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
+					EventBlockHash:       txEvent.Raw.BlockHash[:],
+					EventBlockNumber:     int64(txEvent.Raw.BlockNumber),
+					EventTxIndex:         int64(txEvent.Raw.TxIndex),
+					EventLogIndex:        int64(txEvent.Raw.Index),
+					Eon:                  int64(txEvent.Eon),
+					TxIndex:              int64(txEvent.TxIndex),
+					IdentityPrefix:       txEvent.IdentityPrefix[:],
+					Sender:               txEvent.Sender[:],
+					EncryptedTransaction: txEvent.EncryptedTransaction,
 				})
 				if err != nil {
-					log.Err(err).Msg("err adding key shares")
+					log.Err(err).Msg("err adding encrypting transaction")
 					return err
 				}
 				log.Info().
-					Bytes("key shares", share.Share).
-					Int64("slot", ks.Slot).
-					Msg("new key shares")
+					Bytes("encrypted transaction", txEvent.EncryptedTransaction).
+					Msg("new encrypted transaction")
+			case dd := <-decryptionDataChannel:
+				for index, key := range dd.Keys {
+					err := txMapper.AddDecryptionKeyAndMessage(
+						ctx,
+						&data.DecryptionKey{
+							Eon:              dd.Eon,
+							IdentityPreimage: key.Identity,
+							Key:              key.Key,
+						},
+						&data.DecryptionKeysMessage{
+							Slot:       dd.Slot,
+							InstanceID: dd.InstanceID,
+							Eon:        dd.Eon,
+							TxPointer:  dd.TxPointer,
+						},
+						&data.DecryptionKeysMessageDecryptionKey{
+							DecryptionKeysMessageSlot:     dd.Slot,
+							KeyIndex:                      int64(index),
+							DecryptionKeyEon:              dd.Eon,
+							DecryptionKeyIdentityPreimage: key.Identity,
+						},
+					)
+					if err != nil {
+						log.Err(err).Msg("err adding decryption data")
+						return err
+					}
+					log.Info().
+						Bytes("decryption keys", key.Key).
+						Int64("slot", dd.Slot).
+						Msg("new decryption key")
+				}
+			case ks := <-keyShareChannel:
+				for _, share := range ks.Shares {
+					err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
+						Eon:                ks.Eon,
+						IdentityPreimage:   share.EpochID,
+						KeyperIndex:        ks.KeyperIndex,
+						DecryptionKeyShare: share.Share,
+						Slot:               ks.Slot,
+					})
+					if err != nil {
+						log.Err(err).Msg("err adding key shares")
+						return err
+					}
+					log.Info().
+						Bytes("key shares", share.Share).
+						Int64("slot", ks.Slot).
+						Msg("new key shares")
+				}
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
-	}
+	})
+	return nil
 }
 
 func getTxMapperImpl(ctx context.Context, config *common.Config) (metrics.TxMapper, error) {

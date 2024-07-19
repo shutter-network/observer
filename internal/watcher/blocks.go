@@ -42,7 +42,7 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 		for {
 			select {
 			case <-ctx.Done():
-				return err
+				return ctx.Err()
 			case head := <-newHeads:
 				log.Info().
 					Int64("number", head.Number.Int64()).
