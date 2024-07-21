@@ -31,14 +31,13 @@ func NewBlocksWatcher(config *common.Config, blocksChannel chan *BlockReceivedEv
 }
 
 func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error {
+	newHeads := make(chan *types.Header)
+	sub, err := bw.ethClient.SubscribeNewHead(ctx, newHeads)
+	if err != nil {
+		return err
+	}
+	runner.Defer(sub.Unsubscribe)
 	runner.Go(func() error {
-		newHeads := make(chan *types.Header)
-		sub, err := bw.ethClient.SubscribeNewHead(ctx, newHeads)
-		if err != nil {
-			return err
-		}
-		defer sub.Unsubscribe()
-
 		for {
 			select {
 			case <-ctx.Done():

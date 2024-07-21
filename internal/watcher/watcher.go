@@ -5,11 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/gorilla/websocket"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
@@ -53,11 +57,19 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 	keyShareChannel := make(chan *KeyShareEvent)
 
-	ethClient, err := ethclient.Dial(w.config.RpcURL)
+	dialer := rpc.WithWebsocketDialer(websocket.Dialer{
+		HandshakeTimeout: 45 * time.Second,
+		NetDial: (&net.Dialer{
+			Timeout:   45 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+	})
+	client, err := rpc.DialOptions(context.Background(), w.config.RpcURL, dialer)
 	if err != nil {
 		return err
 	}
 
+	ethClient := ethclient.NewClient(client)
 	err = setNetworkConfig(ctx, ethClient)
 	if err != nil {
 		return err
