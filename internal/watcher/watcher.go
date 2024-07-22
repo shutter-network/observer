@@ -64,7 +64,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 			KeepAlive: 30 * time.Second,
 		}).Dial,
 	})
-	client, err := rpc.DialOptions(context.Background(), w.config.RpcURL, dialer)
+	client, err := rpc.DialOptions(ctx, w.config.RpcURL, dialer)
 	if err != nil {
 		return err
 	}
