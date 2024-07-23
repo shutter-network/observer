@@ -61,6 +61,7 @@ type Block struct {
 	TxHash         []byte
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	Slot           int64
 }
 
 type DecryptedTx struct {

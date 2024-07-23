@@ -16,9 +16,10 @@ INSERT into block(
 	block_hash,
 	block_number,
 	block_timestamp,
-	tx_hash
+	tx_hash,
+	slot
 ) 
-VALUES ($1, $2, $3, $4) 
+VALUES ($1, $2, $3, $4, $5) 
 ON CONFLICT DO NOTHING
 `
 
@@ -27,6 +28,7 @@ type CreateBlockParams struct {
 	BlockNumber    int64
 	BlockTimestamp int64
 	TxHash         []byte
+	Slot           int64
 }
 
 func (q *Queries) CreateBlock(ctx context.Context, arg CreateBlockParams) error {
@@ -35,6 +37,7 @@ func (q *Queries) CreateBlock(ctx context.Context, arg CreateBlockParams) error 
 		arg.BlockNumber,
 		arg.BlockTimestamp,
 		arg.TxHash,
+		arg.Slot,
 	)
 	return err
 }
@@ -219,7 +222,7 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 }
 
 const queryBlockFromBlockNumber = `-- name: QueryBlockFromBlockNumber :exec
-SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at FROM block
+SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
 WHERE block_number = $1
 `
 

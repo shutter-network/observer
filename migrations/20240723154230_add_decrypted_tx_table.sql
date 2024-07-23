@@ -18,6 +18,8 @@ CREATE TYPE tx_status_val AS ENUM
     'unable to decrypt'
 );
 
+ALTER TABLE block
+ADD COLUMN slot BIGINT UNIQUE NOT NULL;
 -- +goose StatementEnd
 
 -- +goose Down

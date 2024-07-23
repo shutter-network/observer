@@ -62,9 +62,10 @@ INSERT into block(
 	block_hash,
 	block_number,
 	block_timestamp,
-	tx_hash
+	tx_hash,
+	slot
 ) 
-VALUES ($1, $2, $3, $4) 
+VALUES ($1, $2, $3, $4, $5) 
 ON CONFLICT DO NOTHING;
 
 -- name: QueryBlockFromBlockNumber :exec
