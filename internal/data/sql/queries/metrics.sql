@@ -66,3 +66,26 @@ INSERT into block(
 ) 
 VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING;
+
+-- name: QueryBlockFromBlockNumber :exec
+SELECT * FROM block
+WHERE block_number = $1;
+
+-- name: CreateDecryptedTX :exec
+INSERT into decrypted_tx(
+	slot,
+	tx_index,
+	tx_hash,
+	tx_status
+) 
+VALUES ($1, $2, $3, $4) 
+ON CONFLICT DO NOTHING;
+
+-- name: QueryDecryptionKeysAndMessage :many
+SELECT
+    dkm.slot, dkm.tx_pointer, dkm.eon, 
+    dk.key
+FROM decryption_keys_message_decryption_key dkmdk
+LEFT JOIN decryption_keys_message dkm ON dkmdk.decryption_keys_message_slot = dkm.slot
+LEFT JOIN decryption_key dk ON dkmdk.decryption_key_eon = dk.eon AND dkmdk.decryption_key_identity_preimage = dk.identity_preimage
+WHERE dkm.slot = $1;

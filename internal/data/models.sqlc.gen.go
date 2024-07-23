@@ -5,8 +5,54 @@
 package data
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type TxStatusVal string
+
+const (
+	TxStatusValIncluded        TxStatusVal = "included"
+	TxStatusValNotincluded     TxStatusVal = "not included"
+	TxStatusValUnabletodecrypt TxStatusVal = "unable to decrypt"
+)
+
+func (e *TxStatusVal) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TxStatusVal(s)
+	case string:
+		*e = TxStatusVal(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TxStatusVal: %T", src)
+	}
+	return nil
+}
+
+type NullTxStatusVal struct {
+	TxStatusVal TxStatusVal
+	Valid       bool // Valid is true if TxStatusVal is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTxStatusVal) Scan(value interface{}) error {
+	if value == nil {
+		ns.TxStatusVal, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TxStatusVal.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTxStatusVal) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TxStatusVal), nil
+}
 
 type Block struct {
 	BlockHash      []byte
@@ -15,6 +61,15 @@ type Block struct {
 	TxHash         []byte
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+}
+
+type DecryptedTx struct {
+	Slot      int64
+	TxIndex   int64
+	TxHash    []byte
+	TxStatus  TxStatusVal
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type DecryptionKey struct {

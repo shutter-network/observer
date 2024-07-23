@@ -7,6 +7,8 @@ package data
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createBlock = `-- name: CreateBlock :exec
@@ -33,6 +35,34 @@ func (q *Queries) CreateBlock(ctx context.Context, arg CreateBlockParams) error 
 		arg.BlockNumber,
 		arg.BlockTimestamp,
 		arg.TxHash,
+	)
+	return err
+}
+
+const createDecryptedTX = `-- name: CreateDecryptedTX :exec
+INSERT into decrypted_tx(
+	slot,
+	tx_index,
+	tx_hash,
+	tx_status
+) 
+VALUES ($1, $2, $3, $4) 
+ON CONFLICT DO NOTHING
+`
+
+type CreateDecryptedTXParams struct {
+	Slot     int64
+	TxIndex  int64
+	TxHash   []byte
+	TxStatus TxStatusVal
+}
+
+func (q *Queries) CreateDecryptedTX(ctx context.Context, arg CreateDecryptedTXParams) error {
+	_, err := q.db.Exec(ctx, createDecryptedTX,
+		arg.Slot,
+		arg.TxIndex,
+		arg.TxHash,
+		arg.TxStatus,
 	)
 	return err
 }
@@ -188,6 +218,16 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 	return err
 }
 
+const queryBlockFromBlockNumber = `-- name: QueryBlockFromBlockNumber :exec
+SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at FROM block
+WHERE block_number = $1
+`
+
+func (q *Queries) QueryBlockFromBlockNumber(ctx context.Context, blockNumber int64) error {
+	_, err := q.db.Exec(ctx, queryBlockFromBlockNumber, blockNumber)
+	return err
+}
+
 const queryDecryptionKeyShare = `-- name: QueryDecryptionKeyShare :many
 SELECT eon, identity_preimage, keyper_index, decryption_key_share, slot, created_at, updated_at FROM decryption_key_share
 WHERE eon = $1 AND identity_preimage = $2 AND keyper_index = $3
@@ -216,6 +256,48 @@ func (q *Queries) QueryDecryptionKeyShare(ctx context.Context, arg QueryDecrypti
 			&i.Slot,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryDecryptionKeysAndMessage = `-- name: QueryDecryptionKeysAndMessage :many
+SELECT
+    dkm.slot, dkm.tx_pointer, dkm.eon, 
+    dk.key
+FROM decryption_keys_message_decryption_key dkmdk
+LEFT JOIN decryption_keys_message dkm ON dkmdk.decryption_keys_message_slot = dkm.slot
+LEFT JOIN decryption_key dk ON dkmdk.decryption_key_eon = dk.eon AND dkmdk.decryption_key_identity_preimage = dk.identity_preimage
+WHERE dkm.slot = $1
+`
+
+type QueryDecryptionKeysAndMessageRow struct {
+	Slot      pgtype.Int8
+	TxPointer pgtype.Int8
+	Eon       pgtype.Int8
+	Key       []byte
+}
+
+func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64) ([]QueryDecryptionKeysAndMessageRow, error) {
+	rows, err := q.db.Query(ctx, queryDecryptionKeysAndMessage, slot)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryDecryptionKeysAndMessageRow
+	for rows.Next() {
+		var i QueryDecryptionKeysAndMessageRow
+		if err := rows.Scan(
+			&i.Slot,
+			&i.TxPointer,
+			&i.Eon,
+			&i.Key,
 		); err != nil {
 			return nil, err
 		}
