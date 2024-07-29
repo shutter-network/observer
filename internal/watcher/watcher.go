@@ -74,7 +74,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	if err != nil {
 		return err
 	}
-	txMapper, err := getTxMapperImpl(ctx, w.config)
+	txMapper, err := getTxMapperImpl(ctx, w.config, ethClient)
 	if err != nil {
 		return err
 	}
@@ -108,6 +108,9 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					Msg("new encrypted transaction")
 			case dd := <-decryptionDataChannel:
 				for index, key := range dd.Keys {
+					if index == 0 {
+						continue
+					}
 					err := txMapper.AddDecryptionKeyAndMessage(
 						ctx,
 						&data.DecryptionKey{
@@ -123,7 +126,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						},
 						&data.DecryptionKeysMessageDecryptionKey{
 							DecryptionKeysMessageSlot:     dd.Slot,
-							KeyIndex:                      int64(index),
+							KeyIndex:                      int64(index) - 1,
 							DecryptionKeyEon:              dd.Eon,
 							DecryptionKeyIdentityPreimage: key.Identity,
 						},
@@ -163,7 +166,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	return nil
 }
 
-func getTxMapperImpl(ctx context.Context, config *common.Config) (metrics.TxMapper, error) {
+func getTxMapperImpl(ctx context.Context, config *common.Config, ethClient *ethclient.Client) (metrics.TxMapper, error) {
 	var txMapper metrics.TxMapper
 
 	if config.NoDB {
@@ -207,7 +210,7 @@ func getTxMapperImpl(ctx context.Context, config *common.Config) (metrics.TxMapp
 		if err != nil {
 			return nil, err
 		}
-		txMapper = metrics.NewTxMapperDB(ctx, db)
+		txMapper = metrics.NewTxMapperDB(ctx, db, ethClient)
 	}
 	return txMapper, nil
 }

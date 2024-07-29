@@ -221,14 +221,24 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 	return err
 }
 
-const queryBlockFromBlockNumber = `-- name: QueryBlockFromBlockNumber :exec
+const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
-WHERE block_number = $1
+WHERE slot = $1 FOR UPDATE
 `
 
-func (q *Queries) QueryBlockFromBlockNumber(ctx context.Context, blockNumber int64) error {
-	_, err := q.db.Exec(ctx, queryBlockFromBlockNumber, blockNumber)
-	return err
+func (q *Queries) QueryBlockFromSlot(ctx context.Context, slot int64) (Block, error) {
+	row := q.db.QueryRow(ctx, queryBlockFromSlot, slot)
+	var i Block
+	err := row.Scan(
+		&i.BlockHash,
+		&i.BlockNumber,
+		&i.BlockTimestamp,
+		&i.TxHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Slot,
+	)
+	return i, err
 }
 
 const queryDecryptionKeyShare = `-- name: QueryDecryptionKeyShare :many
@@ -273,11 +283,11 @@ func (q *Queries) QueryDecryptionKeyShare(ctx context.Context, arg QueryDecrypti
 const queryDecryptionKeysAndMessage = `-- name: QueryDecryptionKeysAndMessage :many
 SELECT
     dkm.slot, dkm.tx_pointer, dkm.eon, 
-    dk.key
+    dk.key, dkmdk.key_index
 FROM decryption_keys_message_decryption_key dkmdk
 LEFT JOIN decryption_keys_message dkm ON dkmdk.decryption_keys_message_slot = dkm.slot
 LEFT JOIN decryption_key dk ON dkmdk.decryption_key_eon = dk.eon AND dkmdk.decryption_key_identity_preimage = dk.identity_preimage
-WHERE dkm.slot = $1
+WHERE dkm.slot = $1 ORDER BY dkmdk.key_index ASC
 `
 
 type QueryDecryptionKeysAndMessageRow struct {
@@ -285,6 +295,7 @@ type QueryDecryptionKeysAndMessageRow struct {
 	TxPointer pgtype.Int8
 	Eon       pgtype.Int8
 	Key       []byte
+	KeyIndex  int64
 }
 
 func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64) ([]QueryDecryptionKeysAndMessageRow, error) {
@@ -301,6 +312,50 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 			&i.TxPointer,
 			&i.Eon,
 			&i.Key,
+			&i.KeyIndex,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryTransactionSubmittedEvent = `-- name: QueryTransactionSubmittedEvent :many
+SELECT event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at FROM transaction_submitted_event
+WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC
+`
+
+type QueryTransactionSubmittedEventParams struct {
+	Eon     int64
+	TxIndex int64
+	Column3 interface{}
+}
+
+func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryTransactionSubmittedEventParams) ([]TransactionSubmittedEvent, error) {
+	rows, err := q.db.Query(ctx, queryTransactionSubmittedEvent, arg.Eon, arg.TxIndex, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TransactionSubmittedEvent
+	for rows.Next() {
+		var i TransactionSubmittedEvent
+		if err := rows.Scan(
+			&i.EventBlockHash,
+			&i.EventBlockNumber,
+			&i.EventTxIndex,
+			&i.EventLogIndex,
+			&i.Eon,
+			&i.TxIndex,
+			&i.IdentityPrefix,
+			&i.Sender,
+			&i.EncryptedTransaction,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

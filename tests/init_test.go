@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
@@ -40,7 +41,7 @@ func (s *TestMetricsSuite) SetupSuite() {
 
 	// s.txManager = database.NewTxManager(s.testDB.DbInstance)
 
-	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance)
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &ethclient.Client{})
 	s.dbQuery = data.New(s.testDB.DbInstance)
 }
 

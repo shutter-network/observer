@@ -32,5 +32,8 @@ type TxMapper interface {
 		dkmdk *data.DecryptionKeysMessageDecryptionKey,
 	) error
 	AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error
-	AddBlock(ctx context.Context, b *data.Block) error
+	AddBlock(
+		ctx context.Context,
+		b *data.Block,
+	) error
 }

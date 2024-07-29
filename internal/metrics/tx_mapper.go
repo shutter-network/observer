@@ -68,7 +68,10 @@ func (tm *TxMapperMemory) AddKeyShare(ctx context.Context, dks *data.DecryptionK
 	return nil
 }
 
-func (tm *TxMapperMemory) AddBlock(ctx context.Context, b *data.Block) error {
+func (tm *TxMapperMemory) AddBlock(
+	ctx context.Context,
+	b *data.Block,
+) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
