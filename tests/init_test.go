@@ -46,5 +46,5 @@ func (s *TestMetricsSuite) SetupSuite() {
 }
 
 func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {
-	s.txMapper = metrics.NewTxMapperMemory()
+	s.txMapper = metrics.NewTxMapperMemory(&ethclient.Client{})
 }

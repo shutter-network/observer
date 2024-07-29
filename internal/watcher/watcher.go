@@ -170,7 +170,7 @@ func getTxMapperImpl(ctx context.Context, config *common.Config, ethClient *ethc
 	var txMapper metrics.TxMapper
 
 	if config.NoDB {
-		txMapper = metrics.NewTxMapperMemory()
+		txMapper = metrics.NewTxMapperMemory(ethClient)
 	} else {
 		var (
 			host     = os.Getenv("DB_HOST")

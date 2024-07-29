@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
 
@@ -15,10 +16,12 @@ type TxMapperMemory struct {
 	TransactionSubmittedEvents          map[string]*data.TransactionSubmittedEvent
 	DecryptionKeyShare                  map[string]*data.DecryptionKeyShare
 	Block                               map[string]*data.Block
-	mutex                               sync.Mutex
+	ethClient                           *ethclient.Client
+
+	mutex sync.Mutex
 }
 
-func NewTxMapperMemory() TxMapper {
+func NewTxMapperMemory(ethClient *ethclient.Client) TxMapper {
 	return &TxMapperMemory{
 		DecryptionKeysMessages:              make(map[int64]*data.DecryptionKeysMessage),
 		DecryptionKeys:                      make(map[string]*data.DecryptionKey),
@@ -26,6 +29,7 @@ func NewTxMapperMemory() TxMapper {
 		TransactionSubmittedEvents:          make(map[string]*data.TransactionSubmittedEvent),
 		DecryptionKeyShare:                  make(map[string]*data.DecryptionKeyShare),
 		Block:                               make(map[string]*data.Block),
+		ethClient:                           ethClient,
 		mutex:                               sync.Mutex{},
 	}
 }

@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"math/big"
 
@@ -136,7 +135,7 @@ func (tm *TxMapperDB) AddBlock(
 	}
 	totalDecKeysAndMessages := len(decKeysAndMessages)
 	if totalDecKeysAndMessages == 0 {
-		log.Debug().Int("slot", int(b.Slot)).Msg("no decryption keys received yet")
+		log.Debug().Int64("slot", b.Slot).Msg("no decryption keys received yet")
 		return nil
 	}
 
@@ -150,6 +149,9 @@ func (tm *TxMapperDB) AddBlock(
 	}
 
 	if len(txSubEvents) != totalDecKeysAndMessages {
+		log.Debug().Int("total tx sub events", len(txSubEvents)).
+			Int("total decryption keys", totalDecKeysAndMessages).
+			Msg("total tx submitted events dont match total decryption keys")
 		return nil
 	}
 	for _, txSubEvent := range txSubEvents {
@@ -166,21 +168,21 @@ func (tm *TxMapperDB) AddBlock(
 		encryptedMsg := new(shcrypto.EncryptedMessage)
 		err = encryptedMsg.Unmarshal(txSubEvent.EncryptedTransaction)
 		if err != nil {
-			log.Err(err).Msg("invalid encrypted message")
-			decryptedTXHash[index], err = generateRandomTxHash()
-			if err != nil {
-				return err
-			}
+			log.Err(err).
+				Int64("tx index", txSubEvent.TxIndex).
+				Int64("slot", b.Slot).
+				Msg("invalid encrypted message")
+			decryptedTXHash[index] = common.Hash{}
 			continue
 		}
 		dkam := decKeysAndMessages[index]
 		tx, err := getDecryptedTX(dkam.Key, encryptedMsg)
 		if err != nil {
-			log.Err(err).Msg("invalid decrypted transaction")
-			decryptedTXHash[index], err = generateRandomTxHash()
-			if err != nil {
-				return err
-			}
+			log.Err(err).
+				Int64("tx index", txSubEvent.TxIndex).
+				Int64("slot", b.Slot).
+				Msg("invalid decrypted transaction")
+			decryptedTXHash[index] = common.Hash{}
 			continue
 		}
 		decryptedTXHash[index] = tx.Hash()
@@ -192,20 +194,17 @@ func getDecryptedTX(key []byte, encryptedMsg *shcrypto.EncryptedMessage) (*types
 	decryptionKey := new(shcrypto.EpochSecretKey)
 	err := decryptionKey.Unmarshal(key)
 	if err != nil {
-		log.Err(err).Msg("invalid decryption key")
 		return nil, errors.Wrapf(err, "invalid decryption key")
 	}
 	decryptedMsg, err := encryptedMsg.Decrypt(decryptionKey)
 	if err != nil {
-		log.Err(err).Msg("failed to decrypt message")
 		return nil, errors.Wrapf(err, "failed to decrypt message")
 	}
 
 	tx := new(types.Transaction)
 	err = tx.UnmarshalBinary(decryptedMsg)
 	if err != nil {
-		log.Err(err).Msg("Failed to unmarshal decrypted message to transaction type")
-		return nil, errors.Wrapf(err, "Failed to decode RLP bytes")
+		return nil, errors.Wrapf(err, "Failed to unmarshal decrypted message to transaction type")
 	}
 	return tx, nil
 }
@@ -226,31 +225,40 @@ func (tm *TxMapperDB) processDecryptedTransactions(
 		Int64("slot", slot).
 		Msg("block info while processing decrypted transactions")
 
-	// fill the blockTxHashes till len(txSubEvents) if less transaction less then txSubEvents
-	for i := len(blockTxHashes); i < len(txSubEvents); i++ {
-		randomTx, err := generateRandomTxHash()
-		if err != nil {
-			return err
-		}
-		blockTxHashes = append(blockTxHashes, randomTx)
-	}
-
 	for index, txSubEvent := range txSubEvents {
-		log.Debug().Str("txHash", decryptedTXHash[index].Hex()).Msg("decryptedTXHash")
-		log.Debug().Str("txHash", blockTxHashes[index].Hex()).Msg("blockTransaction")
-		if decryptedTXHash[index].Cmp(blockTxHashes[index]) == 0 {
-			// it means we have it in correct order and the transaction is correct
-			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-				Slot:     slot,
-				TxIndex:  txSubEvent.TxIndex,
-				TxHash:   decryptedTXHash[index].Bytes(),
-				TxStatus: data.TxStatusValIncluded,
-			})
-			if err != nil {
-				return err
+		if index < len(blockTxHashes) {
+			log.Debug().
+				Str("decryptedTXHash", decryptedTXHash[index].Hex()).
+				Str("blockTxHash", blockTxHashes[index].Hex()).
+				Bool("matches", decryptedTXHash[index].Cmp(blockTxHashes[index]) == 0).
+				Msg("comparing tx hash")
+			if decryptedTXHash[index].Cmp(blockTxHashes[index]) == 0 {
+				// it means we have it in correct order and the transaction is correct
+				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+					Slot:     slot,
+					TxIndex:  txSubEvent.TxIndex,
+					TxHash:   decryptedTXHash[index].Bytes(),
+					TxStatus: data.TxStatusValIncluded,
+				})
+				if err != nil {
+					return err
+				}
+			} else {
+				// something went wrong case
+				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+					Slot:     slot,
+					TxIndex:  txSubEvent.TxIndex,
+					TxHash:   decryptedTXHash[index].Bytes(),
+					TxStatus: data.TxStatusValNotincluded,
+				})
+				if err != nil {
+					return err
+				}
 			}
 		} else {
-			// something went wrong case
+			// Mark remaining txSubEvents as missing
+			log.Debug().Str("txHash", decryptedTXHash[index].Hex()).
+				Msg("decryptedTXHash (missing block transaction)")
 			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 				Slot:     slot,
 				TxIndex:  txSubEvent.TxIndex,
@@ -264,13 +272,4 @@ func (tm *TxMapperDB) processDecryptedTransactions(
 	}
 
 	return nil
-}
-
-func generateRandomTxHash() (common.Hash, error) {
-	hashBytes := make([]byte, 32)
-	_, err := rand.Read(hashBytes)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to generate random bytes: %v", err)
-	}
-	return common.BytesToHash(hashBytes), nil
 }
