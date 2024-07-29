@@ -14,32 +14,38 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT DO NOTHING;
 
 -- name: CreateDecryptionKeyMessage :exec
-INSERT into decryption_keys_message(
-    slot,
-	instance_id,
-	eon,
-	tx_pointer
-) 
-VALUES ($1, $2, $3, $4) 
+WITH data (slot, instance_id, eon, tx_pointer) AS (
+  SELECT 
+    unnest($1::BIGINT[]), 
+    unnest($2::BIGINT[]), 
+    unnest($3::BIGINT[]), 
+    unnest($4::BIGINT[])
+)
+INSERT INTO decryption_keys_message (slot, instance_id, eon, tx_pointer)
+SELECT * FROM data
 ON CONFLICT DO NOTHING;
 
 -- name: CreateDecryptionKey :exec
-INSERT into decryption_key(
-    eon,
-	identity_preimage,
-	key
-) 
-VALUES ($1, $2, $3) 
+WITH data (eon, identity_preimage, key) AS (
+  SELECT 
+    unnest($1::BIGINT[]), 
+    unnest($2::BYTEA[]), 
+    unnest($3::BYTEA[])
+)
+INSERT INTO decryption_key (eon, identity_preimage, key)
+SELECT * FROM data 
 ON CONFLICT DO NOTHING;
 
 -- name: CreateDecryptionKeysMessageDecryptionKey :exec
-INSERT into decryption_keys_message_decryption_key(
-    decryption_keys_message_slot,
-	key_index,
-	decryption_key_eon,
-	decryption_key_identity_preimage
-) 
-VALUES ($1, $2, $3, $4) 
+WITH data (decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage) AS (
+  SELECT 
+    unnest($1::BIGINT[]), 
+    unnest($2::BIGINT[]), 
+    unnest($3::BIGINT[]), 
+    unnest($4::BYTEA[])
+)
+INSERT INTO decryption_keys_message_decryption_key (decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage)
+SELECT * FROM data
 ON CONFLICT DO NOTHING;
 
 -- name: CreateDecryptionKeyShare :exec

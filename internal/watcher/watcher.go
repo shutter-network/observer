@@ -22,6 +22,7 @@ import (
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
 const (
@@ -107,39 +108,59 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					Bytes("encrypted transaction", txEvent.EncryptedTransaction).
 					Msg("new encrypted transaction")
 			case dd := <-decryptionDataChannel:
-				for index, key := range dd.Keys {
-					if index == 0 {
-						continue
-					}
-					err := txMapper.AddDecryptionKeyAndMessage(
-						ctx,
-						&data.DecryptionKey{
-							Eon:              dd.Eon,
-							IdentityPreimage: key.Identity,
-							Key:              key.Key,
-						},
-						&data.DecryptionKeysMessage{
-							Slot:       dd.Slot,
-							InstanceID: dd.InstanceID,
-							Eon:        dd.Eon,
-							TxPointer:  dd.TxPointer,
-						},
-						&data.DecryptionKeysMessageDecryptionKey{
-							DecryptionKeysMessageSlot:     dd.Slot,
-							KeyIndex:                      int64(index) - 1,
-							DecryptionKeyEon:              dd.Eon,
-							DecryptionKeyIdentityPreimage: key.Identity,
-						},
-					)
-					if err != nil {
-						log.Err(err).Msg("err adding decryption data")
-						return err
-					}
-					log.Info().
-						Bytes("decryption keys", key.Key).
-						Int64("slot", dd.Slot).
-						Msg("new decryption key")
+				keys, identites := getDecryptionKeysAndIdentities(dd.Keys)
+				err := txMapper.AddDecryptionKeysAndMessages(
+					ctx,
+					&metrics.DecKeysAndMessages{
+						Eon:        dd.Eon,
+						Keys:       keys,
+						Identities: identites,
+						Slot:       dd.Slot,
+						InstanceID: dd.InstanceID,
+						TxPointer:  dd.TxPointer,
+					},
+				)
+				if err != nil {
+					log.Err(err).Msg("err adding decryption data")
+					return err
 				}
+				log.Info().
+					Int("total decryption keys", len(dd.Keys)).
+					Int64("slot", dd.Slot).
+					Msg("new decryption keys received")
+				// for index, key := range dd.Keys {
+				// 	if index == 0 {
+				// 		continue
+				// 	}
+				// 	err := txMapper.AddDecryptionKeyAndMessage(
+				// 		ctx,
+				// 		&data.DecryptionKey{
+				// 			Eon:              dd.Eon,
+				// 			IdentityPreimage: key.Identity,
+				// 			Key:              key.Key,
+				// 		},
+				// 		&data.DecryptionKeysMessage{
+				// 			Slot:       dd.Slot,
+				// 			InstanceID: dd.InstanceID,
+				// 			Eon:        dd.Eon,
+				// 			TxPointer:  dd.TxPointer,
+				// 		},
+				// 		&data.DecryptionKeysMessageDecryptionKey{
+				// 			DecryptionKeysMessageSlot:     dd.Slot,
+				// 			KeyIndex:                      int64(index) - 1,
+				// 			DecryptionKeyEon:              dd.Eon,
+				// 			DecryptionKeyIdentityPreimage: key.Identity,
+				// 		},
+				// 	)
+				// 	if err != nil {
+				// 		log.Err(err).Msg("err adding decryption data")
+				// 		return err
+				// 	}
+				// 	log.Info().
+				// 		Bytes("decryption keys", key.Key).
+				// 		Int64("slot", dd.Slot).
+				// 		Msg("new decryption key")
+				// }
 			case ks := <-keyShareChannel:
 				for _, share := range ks.Shares {
 					err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
@@ -233,4 +254,19 @@ func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
 	default:
 		return errors.New("encountered unsupported chain id")
 	}
+}
+
+func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) {
+	var keys [][]byte
+	var identities [][]byte
+
+	for index, msg := range p2pMsgs {
+		if index == 0 {
+			continue
+		}
+		keys = append(keys, msg.Key)
+		identities = append(identities, msg.Identity)
+	}
+
+	return keys, identities
 }

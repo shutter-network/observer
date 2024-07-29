@@ -43,22 +43,38 @@ func (tm *TxMapperMemory) AddTransactionSubmittedEvent(ctx context.Context, tse 
 	return nil
 }
 
-func (tm *TxMapperMemory) AddDecryptionKeyAndMessage(
+func (tm *TxMapperMemory) AddDecryptionKeysAndMessages(
 	ctx context.Context,
-	dk *data.DecryptionKey,
-	dkm *data.DecryptionKeysMessage,
-	dkmdk *data.DecryptionKeysMessageDecryptionKey,
+	dkam *DecKeysAndMessages,
 ) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tm.DecryptionKeysMessages[dkm.Slot] = dkm
+	tm.DecryptionKeysMessages[dkam.Slot] = &data.DecryptionKeysMessage{
+		Slot:       dkam.Slot,
+		InstanceID: dkam.InstanceID,
+		Eon:        dkam.Eon,
+		TxPointer:  dkam.TxPointer,
+	}
 
-	dkKey := createDecryptionKeyKey(dk.Eon, dk.IdentityPreimage)
-	tm.DecryptionKeys[dkKey] = dk
+	for index, identity := range dkam.Identities {
+		dkKey := createDecryptionKeyKey(dkam.Eon, identity)
+		tm.DecryptionKeys[dkKey] = &data.DecryptionKey{
+			Eon:              dkam.Eon,
+			IdentityPreimage: identity,
+			Key:              dkam.Keys[index],
+		}
+	}
 
-	dkmdkKey := createDecryptionKeysMessageDecryptionKeyKey(dkmdk.DecryptionKeysMessageSlot, dkmdk.DecryptionKeyEon, dkmdk.DecryptionKeyIdentityPreimage, dkmdk.KeyIndex)
-	tm.DecryptionKeysMessageDecryptionKeys[dkmdkKey] = dkmdk
+	for index, identity := range dkam.Identities {
+		dkmdkKey := createDecryptionKeysMessageDecryptionKeyKey(dkam.Slot, dkam.Eon, identity, int64(index))
+		tm.DecryptionKeysMessageDecryptionKeys[dkmdkKey] = &data.DecryptionKeysMessageDecryptionKey{
+			DecryptionKeysMessageSlot:     dkam.Slot,
+			KeyIndex:                      int64(index),
+			DecryptionKeyEon:              dkam.Eon,
+			DecryptionKeyIdentityPreimage: identity,
+		}
+	}
 
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/shutter-network/gnosh-metrics/internal/data"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 )
 
 func (s *TestMetricsSuite) TestEncryptedTransaction() {
@@ -53,20 +54,13 @@ func (s *TestMetricsSuite) TestAddDecryptionData() {
 	instanceID := rand.Int63()
 	txPointer := rand.Int63()
 
-	err = s.txMapperDB.AddDecryptionKeyAndMessage(ctx, &data.DecryptionKey{
-		Eon:              eon,
-		IdentityPreimage: identityPreimage,
-		Key:              dk,
-	}, &data.DecryptionKeysMessage{
+	err = s.txMapperDB.AddDecryptionKeysAndMessages(ctx, &metrics.DecKeysAndMessages{
+		Eon:        eon,
+		Keys:       [][]byte{dk},
+		Identities: [][]byte{identityPreimage},
 		Slot:       slot,
 		InstanceID: instanceID,
-		Eon:        eon,
 		TxPointer:  txPointer,
-	}, &data.DecryptionKeysMessageDecryptionKey{
-		DecryptionKeysMessageSlot:     slot,
-		KeyIndex:                      0,
-		DecryptionKeyEon:              eon,
-		DecryptionKeyIdentityPreimage: identityPreimage,
 	})
 	s.Require().NoError(err)
 }
@@ -155,20 +149,13 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 	})
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddDecryptionKeyAndMessage(ctx, &data.DecryptionKey{
-		Eon:              eon,
-		IdentityPreimage: identityPreimage,
-		Key:              dk,
-	}, &data.DecryptionKeysMessage{
+	err = s.txMapperDB.AddDecryptionKeysAndMessages(ctx, &metrics.DecKeysAndMessages{
+		Eon:        eon,
+		Keys:       [][]byte{dk},
+		Identities: [][]byte{identityPreimage},
 		Slot:       slot,
 		InstanceID: instanceID,
-		Eon:        eon,
 		TxPointer:  txPointer,
-	}, &data.DecryptionKeysMessageDecryptionKey{
-		DecryptionKeysMessageSlot:     slot,
-		KeyIndex:                      0,
-		DecryptionKeyEon:              eon,
-		DecryptionKeyIdentityPreimage: identityPreimage,
 	})
 	s.Require().NoError(err)
 }

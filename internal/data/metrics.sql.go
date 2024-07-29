@@ -71,50 +71,54 @@ func (q *Queries) CreateDecryptedTX(ctx context.Context, arg CreateDecryptedTXPa
 }
 
 const createDecryptionKey = `-- name: CreateDecryptionKey :exec
-INSERT into decryption_key(
-    eon,
-	identity_preimage,
-	key
-) 
-VALUES ($1, $2, $3) 
+WITH data (eon, identity_preimage, key) AS (
+  SELECT 
+    unnest($1::BIGINT[]), 
+    unnest($2::BYTEA[]), 
+    unnest($3::BYTEA[])
+)
+INSERT INTO decryption_key (eon, identity_preimage, key)
+SELECT eon, identity_preimage, key FROM data 
 ON CONFLICT DO NOTHING
 `
 
 type CreateDecryptionKeyParams struct {
-	Eon              int64
-	IdentityPreimage []byte
-	Key              []byte
+	Column1 []int64
+	Column2 [][]byte
+	Column3 [][]byte
 }
 
 func (q *Queries) CreateDecryptionKey(ctx context.Context, arg CreateDecryptionKeyParams) error {
-	_, err := q.db.Exec(ctx, createDecryptionKey, arg.Eon, arg.IdentityPreimage, arg.Key)
+	_, err := q.db.Exec(ctx, createDecryptionKey, arg.Column1, arg.Column2, arg.Column3)
 	return err
 }
 
 const createDecryptionKeyMessage = `-- name: CreateDecryptionKeyMessage :exec
-INSERT into decryption_keys_message(
-    slot,
-	instance_id,
-	eon,
-	tx_pointer
-) 
-VALUES ($1, $2, $3, $4) 
+WITH data (slot, instance_id, eon, tx_pointer) AS (
+  SELECT 
+    unnest($1::BIGINT[]), 
+    unnest($2::BIGINT[]), 
+    unnest($3::BIGINT[]), 
+    unnest($4::BIGINT[])
+)
+INSERT INTO decryption_keys_message (slot, instance_id, eon, tx_pointer)
+SELECT slot, instance_id, eon, tx_pointer FROM data
 ON CONFLICT DO NOTHING
 `
 
 type CreateDecryptionKeyMessageParams struct {
-	Slot       int64
-	InstanceID int64
-	Eon        int64
-	TxPointer  int64
+	Column1 []int64
+	Column2 []int64
+	Column3 []int64
+	Column4 []int64
 }
 
 func (q *Queries) CreateDecryptionKeyMessage(ctx context.Context, arg CreateDecryptionKeyMessageParams) error {
 	_, err := q.db.Exec(ctx, createDecryptionKeyMessage,
-		arg.Slot,
-		arg.InstanceID,
-		arg.Eon,
-		arg.TxPointer,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
 	)
 	return err
 }
@@ -151,29 +155,31 @@ func (q *Queries) CreateDecryptionKeyShare(ctx context.Context, arg CreateDecryp
 }
 
 const createDecryptionKeysMessageDecryptionKey = `-- name: CreateDecryptionKeysMessageDecryptionKey :exec
-INSERT into decryption_keys_message_decryption_key(
-    decryption_keys_message_slot,
-	key_index,
-	decryption_key_eon,
-	decryption_key_identity_preimage
-) 
-VALUES ($1, $2, $3, $4) 
+WITH data (decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage) AS (
+  SELECT 
+    unnest($1::BIGINT[]), 
+    unnest($2::BIGINT[]), 
+    unnest($3::BIGINT[]), 
+    unnest($4::BYTEA[])
+)
+INSERT INTO decryption_keys_message_decryption_key (decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage)
+SELECT decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage FROM data
 ON CONFLICT DO NOTHING
 `
 
 type CreateDecryptionKeysMessageDecryptionKeyParams struct {
-	DecryptionKeysMessageSlot     int64
-	KeyIndex                      int64
-	DecryptionKeyEon              int64
-	DecryptionKeyIdentityPreimage []byte
+	Column1 []int64
+	Column2 []int64
+	Column3 []int64
+	Column4 [][]byte
 }
 
 func (q *Queries) CreateDecryptionKeysMessageDecryptionKey(ctx context.Context, arg CreateDecryptionKeysMessageDecryptionKeyParams) error {
 	_, err := q.db.Exec(ctx, createDecryptionKeysMessageDecryptionKey,
-		arg.DecryptionKeysMessageSlot,
-		arg.KeyIndex,
-		arg.DecryptionKeyEon,
-		arg.DecryptionKeyIdentityPreimage,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
 	)
 	return err
 }

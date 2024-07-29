@@ -52,41 +52,44 @@ func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tse *dat
 	return nil
 }
 
-func (tm *TxMapperDB) AddDecryptionKeyAndMessage(
+func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	ctx context.Context,
-	dk *data.DecryptionKey,
-	dkm *data.DecryptionKeysMessage,
-	dkmdk *data.DecryptionKeysMessageDecryptionKey,
+	dkam *DecKeysAndMessages,
 ) error {
+	if len(dkam.Keys) == 0 {
+		return nil
+	}
 	tx, err := tm.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 	qtx := tm.dbQuery.WithTx(tx)
+
+	eons, slots, instanceIDs, txPointers, keyIndexes := getDecryptionMessageInfos(dkam)
 	err = qtx.CreateDecryptionKey(ctx, data.CreateDecryptionKeyParams{
-		Eon:              dk.Eon,
-		IdentityPreimage: dk.IdentityPreimage,
-		Key:              dk.Key,
+		Column1: eons,
+		Column2: dkam.Identities,
+		Column3: dkam.Keys,
 	})
 	if err != nil {
 		return err
 	}
 	err = qtx.CreateDecryptionKeyMessage(ctx, data.CreateDecryptionKeyMessageParams{
-		Slot:       dkm.Slot,
-		InstanceID: dkm.InstanceID,
-		Eon:        dkm.Eon,
-		TxPointer:  dkm.TxPointer,
+		Column1: slots,
+		Column2: instanceIDs,
+		Column3: eons,
+		Column4: txPointers,
 	})
 	if err != nil {
 		return err
 	}
 
 	err = qtx.CreateDecryptionKeysMessageDecryptionKey(ctx, data.CreateDecryptionKeysMessageDecryptionKeyParams{
-		DecryptionKeysMessageSlot:     dkmdk.DecryptionKeysMessageSlot,
-		KeyIndex:                      dkmdk.KeyIndex,
-		DecryptionKeyEon:              dkmdk.DecryptionKeyEon,
-		DecryptionKeyIdentityPreimage: dkmdk.DecryptionKeyIdentityPreimage,
+		Column1: slots,
+		Column2: keyIndexes,
+		Column3: eons,
+		Column4: dkam.Identities,
 	})
 	if err != nil {
 		return err
@@ -272,4 +275,21 @@ func (tm *TxMapperDB) processDecryptedTransactions(
 	}
 
 	return nil
+}
+
+func getDecryptionMessageInfos(dkam *DecKeysAndMessages) ([]int64, []int64, []int64, []int64, []int64) {
+	eons := make([]int64, len(dkam.Keys))
+	slots := make([]int64, len(dkam.Keys))
+	instanceIDs := make([]int64, len(dkam.Keys))
+	txPointers := make([]int64, len(dkam.Keys))
+	keyIndexes := make([]int64, len(dkam.Keys))
+
+	for index := range dkam.Keys {
+		eons[index] = dkam.Eon
+		slots[index] = dkam.Slot
+		txPointers[index] = dkam.TxPointer
+		keyIndexes[index] = int64(index)
+	}
+
+	return eons, slots, instanceIDs, txPointers, keyIndexes
 }
