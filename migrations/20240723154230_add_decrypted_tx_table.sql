@@ -4,8 +4,7 @@
 CREATE TYPE tx_status_val AS ENUM 
 (
     'included', 
-    'not included',
-    'unable to decrypt'
+    'not included'
 );
 
 
