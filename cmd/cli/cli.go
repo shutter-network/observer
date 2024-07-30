@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/mitchellh/mapstructure"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
@@ -56,7 +58,6 @@ func Cmd() *cobra.Command {
 			}
 
 			p2pEnviroment, err := strconv.ParseInt(os.Getenv("P2P_ENVIRONMENT"), 10, 0)
-
 			if err != nil {
 				return err
 			}
@@ -97,15 +98,16 @@ func Cmd() *cobra.Command {
 }
 
 func Start() error {
+	log.Info().Msg("Starting Observer")
 	// start services here
 	ctx := context.Background()
 
 	services := []service.Service{}
 	if !config.NoDB {
 		metrics.EnableMetrics()
-		//TODO: make a decision to add host and port via cli args for metrics
+		// TODO: make a decision to add host and port via cli args for metrics
 		metricsServer := metrics.NewMetricsServer(&metricsCommon.MetricsServerConfig{
-			Host: "localhost",
+			Host: "0.0.0.0",
 			Port: 4000,
 		})
 		services = append(services, metricsServer)
