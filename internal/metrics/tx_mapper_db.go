@@ -99,7 +99,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 
 	block, err := qtx.QueryBlockFromSlot(ctx, decKeysAndMessages.Slot)
 	if err != nil {
-		log.Debug().Int("slot", int(decKeysAndMessages.Slot)).Msg("block not found in AddDecryptedTxFromDecryptionKeys")
+		log.Debug().Int64("slot", decKeysAndMessages.Slot).Msg("block not found in AddDecryptedTxFromDecryptionKeys")
 		return tx.Commit(ctx)
 	}
 
@@ -123,7 +123,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 		BlockNumber:        block.BlockNumber,
 	})
 	if err != nil {
-		log.Err(err).Int("slot", int(decKeysAndMessages.Slot)).Msg("failed to process transaction execution")
+		log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
 		return err
 	}
 	for i := 0; i < totalDecKeysAndMessages; i++ {
@@ -193,7 +193,7 @@ func (tm *TxMapperDB) AddBlock(
 		BlockNumber:        b.BlockNumber,
 	})
 	if err != nil {
-		log.Err(err).Int("slot", int(b.Slot)).Msg("failed to process transaction execution")
+		log.Err(err).Int64("slot", b.Slot).Msg("failed to process transaction execution")
 		return err
 	}
 	return tx.Commit(ctx)
