@@ -91,7 +91,7 @@ ON CONFLICT DO NOTHING;
 -- name: QueryDecryptionKeysAndMessage :many
 SELECT
     dkm.slot, dkm.tx_pointer, dkm.eon, 
-    dk.key, dkmdk.key_index
+    dk.key, dk.identity_preimage, dkmdk.key_index
 FROM decryption_keys_message_decryption_key dkmdk
 LEFT JOIN decryption_keys_message dkm ON dkmdk.decryption_keys_message_slot = dkm.slot
 LEFT JOIN decryption_key dk ON dkmdk.decryption_key_eon = dk.eon AND dkmdk.decryption_key_identity_preimage = dk.identity_preimage
