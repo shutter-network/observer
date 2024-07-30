@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
 
@@ -15,10 +16,12 @@ type TxMapperMemory struct {
 	TransactionSubmittedEvents          map[string]*data.TransactionSubmittedEvent
 	DecryptionKeyShare                  map[string]*data.DecryptionKeyShare
 	Block                               map[string]*data.Block
-	mutex                               sync.Mutex
+	ethClient                           *ethclient.Client
+
+	mutex sync.Mutex
 }
 
-func NewTxMapperMemory() TxMapper {
+func NewTxMapperMemory(ethClient *ethclient.Client) TxMapper {
 	return &TxMapperMemory{
 		DecryptionKeysMessages:              make(map[int64]*data.DecryptionKeysMessage),
 		DecryptionKeys:                      make(map[string]*data.DecryptionKey),
@@ -26,6 +29,7 @@ func NewTxMapperMemory() TxMapper {
 		TransactionSubmittedEvents:          make(map[string]*data.TransactionSubmittedEvent),
 		DecryptionKeyShare:                  make(map[string]*data.DecryptionKeyShare),
 		Block:                               make(map[string]*data.Block),
+		ethClient:                           ethClient,
 		mutex:                               sync.Mutex{},
 	}
 }
@@ -39,22 +43,38 @@ func (tm *TxMapperMemory) AddTransactionSubmittedEvent(ctx context.Context, tse 
 	return nil
 }
 
-func (tm *TxMapperMemory) AddDecryptionKeyAndMessage(
+func (tm *TxMapperMemory) AddDecryptionKeysAndMessages(
 	ctx context.Context,
-	dk *data.DecryptionKey,
-	dkm *data.DecryptionKeysMessage,
-	dkmdk *data.DecryptionKeysMessageDecryptionKey,
+	dkam *DecKeysAndMessages,
 ) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
-	tm.DecryptionKeysMessages[dkm.Slot] = dkm
+	tm.DecryptionKeysMessages[dkam.Slot] = &data.DecryptionKeysMessage{
+		Slot:       dkam.Slot,
+		InstanceID: dkam.InstanceID,
+		Eon:        dkam.Eon,
+		TxPointer:  dkam.TxPointer,
+	}
 
-	dkKey := createDecryptionKeyKey(dk.Eon, dk.IdentityPreimage)
-	tm.DecryptionKeys[dkKey] = dk
+	for index, identity := range dkam.Identities {
+		dkKey := createDecryptionKeyKey(dkam.Eon, identity)
+		tm.DecryptionKeys[dkKey] = &data.DecryptionKey{
+			Eon:              dkam.Eon,
+			IdentityPreimage: identity,
+			Key:              dkam.Keys[index],
+		}
+	}
 
-	dkmdkKey := createDecryptionKeysMessageDecryptionKeyKey(dkmdk.DecryptionKeysMessageSlot, dkmdk.DecryptionKeyEon, dkmdk.DecryptionKeyIdentityPreimage, dkmdk.KeyIndex)
-	tm.DecryptionKeysMessageDecryptionKeys[dkmdkKey] = dkmdk
+	for index, identity := range dkam.Identities {
+		dkmdkKey := createDecryptionKeysMessageDecryptionKeyKey(dkam.Slot, dkam.Eon, identity, int64(index))
+		tm.DecryptionKeysMessageDecryptionKeys[dkmdkKey] = &data.DecryptionKeysMessageDecryptionKey{
+			DecryptionKeysMessageSlot:     dkam.Slot,
+			KeyIndex:                      int64(index),
+			DecryptionKeyEon:              dkam.Eon,
+			DecryptionKeyIdentityPreimage: identity,
+		}
+	}
 
 	return nil
 }
@@ -68,7 +88,10 @@ func (tm *TxMapperMemory) AddKeyShare(ctx context.Context, dks *data.DecryptionK
 	return nil
 }
 
-func (tm *TxMapperMemory) AddBlock(ctx context.Context, b *data.Block) error {
+func (tm *TxMapperMemory) AddBlock(
+	ctx context.Context,
+	b *data.Block,
+) error {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 

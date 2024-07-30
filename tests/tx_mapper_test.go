@@ -8,6 +8,7 @@ import (
 	cryptorand "crypto/rand"
 
 	"github.com/shutter-network/gnosh-metrics/internal/data"
+	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
 	blst "github.com/supranational/blst/bindings/go"
 	"gotest.tools/assert"
@@ -112,20 +113,13 @@ func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 
 	s.Require().Equal(tx, decryptedMessage)
 
-	err = s.txMapper.AddDecryptionKeyAndMessage(ctx, &data.DecryptionKey{
-		Eon:              eon,
-		IdentityPreimage: identity.Marshal(),
-		Key:              decryptionKey.Marshal(),
-	}, &data.DecryptionKeysMessage{
+	err = s.txMapper.AddDecryptionKeysAndMessages(ctx, &metrics.DecKeysAndMessages{
+		Eon:        eon,
+		Keys:       [][]byte{decryptionKey.Marshal()},
+		Identities: [][]byte{identity.Marshal()},
 		Slot:       slot,
 		InstanceID: instanceID,
-		Eon:        eon,
 		TxPointer:  txPointer,
-	}, &data.DecryptionKeysMessageDecryptionKey{
-		DecryptionKeysMessageSlot:     slot,
-		KeyIndex:                      0,
-		DecryptionKeyEon:              eon,
-		DecryptionKeyIdentityPreimage: identity.Marshal(),
 	})
 	s.Require().NoError(err)
 }

@@ -23,14 +23,24 @@ type Tx struct {
 	BlockHash   []byte
 }
 
+type DecKeysAndMessages struct {
+	Eon        int64
+	Keys       [][]byte
+	Identities [][]byte
+	Slot       int64
+	InstanceID int64
+	TxPointer  int64
+}
+
 type TxMapper interface {
 	AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error
-	AddDecryptionKeyAndMessage(
+	AddDecryptionKeysAndMessages(
 		ctx context.Context,
-		dk *data.DecryptionKey,
-		dkm *data.DecryptionKeysMessage,
-		dkmdk *data.DecryptionKeysMessageDecryptionKey,
+		dkam *DecKeysAndMessages,
 	) error
 	AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error
-	AddBlock(ctx context.Context, b *data.Block) error
+	AddBlock(
+		ctx context.Context,
+		b *data.Block,
+	) error
 }

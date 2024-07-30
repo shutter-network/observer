@@ -2,9 +2,11 @@ package watcher
 
 import (
 	"context"
+	"math"
 	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
@@ -89,6 +91,12 @@ func (pmw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.
 				Uint64("most-recent-block", pmw.mostRecentBlock).
 				Msg("received DecryptionKeys without any slot")
 			return pubsub.ValidationReject, nil
+		}
+		if msg.Eon > math.MaxInt64 {
+			return pubsub.ValidationReject, errors.Errorf("eon %d overflows int64", msg.Eon)
+		}
+		if len(msg.Keys) == 0 {
+			return pubsub.ValidationReject, errors.New("no keys in message")
 		}
 	case *p2pmsg.DecryptionKeyShares:
 		extra := msg.Extra.(*p2pmsg.DecryptionKeyShares_Gnosis).Gnosis

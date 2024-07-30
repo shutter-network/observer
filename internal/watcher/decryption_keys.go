@@ -83,6 +83,7 @@ func (pmw *P2PMsgsWatcher) insertBlock(ctx context.Context, ev *BlockReceivedEve
 		BlockNumber:    ev.Header.Number.Int64(),
 		BlockTimestamp: int64(ev.Header.Time),
 		TxHash:         ev.Header.TxHash[:],
+		Slot:           getSlotForBlock(ev.Header),
 	})
 	if err != nil {
 		log.Err(err).Msg("err adding block")
