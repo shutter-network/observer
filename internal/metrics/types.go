@@ -32,6 +32,20 @@ type DecKeysAndMessages struct {
 	TxPointer  int64
 }
 
+type DecKeyAndMessage struct {
+	Slot             int64
+	TxPointer        int64
+	Eon              int64
+	Key              []byte
+	IdentityPreimage []byte
+	KeyIndex         int64
+}
+
+type TxExecution struct {
+	BlockNumber        int64
+	decKeysAndMessages []*DecKeyAndMessage
+}
+
 type TxMapper interface {
 	AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error
 	AddDecryptionKeysAndMessages(
