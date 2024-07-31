@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
-	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/identitypreimage"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
 )
 
@@ -96,14 +95,21 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	if err != nil {
 		return err
 	}
+	totalDecKeysAndMessages := len(decKeysAndMessages.Keys)
 
 	block, err := qtx.QueryBlockFromSlot(ctx, decKeysAndMessages.Slot)
 	if err != nil {
 		log.Debug().Int64("slot", decKeysAndMessages.Slot).Msg("block not found in AddDecryptedTxFromDecryptionKeys")
-		return tx.Commit(ctx)
+		err = tx.Commit(ctx)
+		if err != nil {
+			log.Err(err).Msg("unable to commit db transaction")
+			return err
+		}
+		for i := 0; i < totalDecKeysAndMessages; i++ {
+			metricsDecKeyReceived.Inc()
+		}
+		return nil
 	}
-
-	totalDecKeysAndMessages := len(decKeysAndMessages.Keys)
 
 	dkam := make([]*DecKeyAndMessage, totalDecKeysAndMessages)
 	for index, key := range decKeysAndMessages.Keys {
@@ -119,17 +125,22 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	}
 
 	err = tm.processTransactionExecution(ctx, &TxExecution{
-		decKeysAndMessages: dkam,
+		DecKeysAndMessages: dkam,
 		BlockNumber:        block.BlockNumber,
 	})
 	if err != nil {
 		log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
 		return err
 	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Err(err).Msg("unable to commit db transaction")
+		return err
+	}
 	for i := 0; i < totalDecKeysAndMessages; i++ {
 		metricsDecKeyReceived.Inc()
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (tm *TxMapperDB) AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error {
@@ -189,7 +200,7 @@ func (tm *TxMapperDB) AddBlock(
 		}
 	}
 	err = tm.processTransactionExecution(ctx, &TxExecution{
-		decKeysAndMessages: dkam,
+		DecKeysAndMessages: dkam,
 		BlockNumber:        b.BlockNumber,
 	})
 	if err != nil {
@@ -203,13 +214,13 @@ func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,
 ) error {
-	totalDecKeysAndMessages := len(te.decKeysAndMessages)
+	totalDecKeysAndMessages := len(te.DecKeysAndMessages)
 	if totalDecKeysAndMessages == 0 {
 		return fmt.Errorf("no decryption keys and messages provided")
 	}
 	txSubEvents, err := tm.dbQuery.QueryTransactionSubmittedEvent(ctx, data.QueryTransactionSubmittedEventParams{
-		Eon:     te.decKeysAndMessages[0].Eon,
-		TxIndex: te.decKeysAndMessages[0].TxPointer,
+		Eon:     te.DecKeysAndMessages[0].Eon,
+		TxIndex: te.DecKeysAndMessages[0].TxPointer,
 		Column3: totalDecKeysAndMessages,
 	})
 	if err != nil {
@@ -224,11 +235,11 @@ func (tm *TxMapperDB) processTransactionExecution(
 	}
 
 	identityPreimageToDecKeyAndMsg := make(map[string]*DecKeyAndMessage)
-	for _, dkam := range te.decKeysAndMessages {
+	for _, dkam := range te.DecKeysAndMessages {
 		identityPreimageToDecKeyAndMsg[hex.EncodeToString(dkam.IdentityPreimage)] = dkam
 	}
 
-	slot := te.decKeysAndMessages[0].Slot
+	slot := te.DecKeysAndMessages[0].Slot
 	detailedBlock, err := tm.ethClient.BlockByNumber(ctx, big.NewInt(te.BlockNumber))
 	if err != nil {
 		return err
@@ -244,7 +255,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 		Msg("block info while processing decrypted transactions")
 
 	for index, txSubEvent := range txSubEvents {
-		decryptedTxHash := getDecryptedTXHash(txSubEvent, identityPreimageToDecKeyAndMsg)
+		decryptedTxHash, err := getDecryptedTXHash(txSubEvent, identityPreimageToDecKeyAndMsg)
+		if err != nil {
+			log.Err(err).Msg("error while trying to get decrypted tx hash")
+		}
 		if index < len(blockTxHashes) {
 			log.Debug().
 				Str("decryptedTXHash", decryptedTxHash.Hex()).
@@ -312,59 +326,35 @@ func getDecryptionMessageInfos(dkam *DecKeysAndMessages) ([]int64, []int64, []in
 
 func computeIdentity(prefix []byte, sender common.Address) []byte {
 	imageBytes := append(prefix, sender.Bytes()...)
-	return identitypreimage.IdentityPreimage(imageBytes).Bytes()
+	return imageBytes
 }
 
 func getDecryptedTXHash(
 	txSubEvent data.TransactionSubmittedEvent,
 	identityPreimageToDecKeyAndMsg map[string]*DecKeyAndMessage,
-) common.Hash {
+) (common.Hash, error) {
 	identityPreimage := computeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
-	log.Debug().Int64("txIndex", txSubEvent.TxIndex).
-		Int64("eon", txSubEvent.Eon).
-		Str("identityPreimage", hex.EncodeToString(identityPreimage)).
-		Msg("txSubEvent")
-
 	dkam, ok := identityPreimageToDecKeyAndMsg[hex.EncodeToString(identityPreimage)]
 	if !ok {
-		log.Debug().
-			Int64("tx index", txSubEvent.TxIndex).
-			Int64("slot", dkam.Slot).
-			Str("identityPreimage", hex.EncodeToString(identityPreimage)).
-			Msg("identity preimage not found")
-		return common.Hash{}
+		return common.Hash{}, fmt.Errorf("identity preimage not found %s", hex.EncodeToString(identityPreimage))
 	}
-	log.Debug().Int64("txPointer", dkam.TxPointer).
-		Int64("keyIndex", dkam.KeyIndex).
-		Int64("eon", dkam.Eon).
-		Str("identityPreimage", hex.EncodeToString(dkam.IdentityPreimage)).
-		Msg("dkam")
-
-	encryptedMsg := new(shcrypto.EncryptedMessage)
-	err := encryptedMsg.Unmarshal(txSubEvent.EncryptedTransaction)
+	tx, err := decryptTransaction(dkam.Key, txSubEvent.EncryptedTransaction)
 	if err != nil {
-		log.Err(err).
-			Int64("tx index", txSubEvent.TxIndex).
-			Int64("slot", dkam.Slot).
-			Msg("invalid encrypted message")
-		return common.Hash{}
+		return common.Hash{}, err
 	}
-	tx, err := getDecryptedTX(dkam.Key, encryptedMsg)
-	if err != nil {
-		log.Err(err).
-			Int64("tx index", txSubEvent.TxIndex).
-			Int64("slot", dkam.Slot).
-			Msg("invalid decrypted transaction")
-		return common.Hash{}
-	}
-	return tx.Hash()
+	return tx.Hash(), nil
 }
 
-func getDecryptedTX(key []byte, encryptedMsg *shcrypto.EncryptedMessage) (*types.Transaction, error) {
+func decryptTransaction(key []byte, encrypted []byte) (*types.Transaction, error) {
 	decryptionKey := new(shcrypto.EpochSecretKey)
 	err := decryptionKey.Unmarshal(key)
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid decryption key")
+	}
+	encryptedMsg := new(shcrypto.EncryptedMessage)
+	err = encryptedMsg.Unmarshal(encrypted)
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid encrypted msg")
 	}
 	decryptedMsg, err := encryptedMsg.Decrypt(decryptionKey)
 	if err != nil {

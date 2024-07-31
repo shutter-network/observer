@@ -43,7 +43,7 @@ type DecKeyAndMessage struct {
 
 type TxExecution struct {
 	BlockNumber        int64
-	decKeysAndMessages []*DecKeyAndMessage
+	DecKeysAndMessages []*DecKeyAndMessage
 }
 
 type TxMapper interface {
