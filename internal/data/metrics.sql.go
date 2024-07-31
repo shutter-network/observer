@@ -289,7 +289,7 @@ func (q *Queries) QueryDecryptionKeyShare(ctx context.Context, arg QueryDecrypti
 const queryDecryptionKeysAndMessage = `-- name: QueryDecryptionKeysAndMessage :many
 SELECT
     dkm.slot, dkm.tx_pointer, dkm.eon, 
-    dk.key, dkmdk.key_index
+    dk.key, dk.identity_preimage, dkmdk.key_index
 FROM decryption_keys_message_decryption_key dkmdk
 LEFT JOIN decryption_keys_message dkm ON dkmdk.decryption_keys_message_slot = dkm.slot
 LEFT JOIN decryption_key dk ON dkmdk.decryption_key_eon = dk.eon AND dkmdk.decryption_key_identity_preimage = dk.identity_preimage
@@ -297,11 +297,12 @@ WHERE dkm.slot = $1 ORDER BY dkmdk.key_index ASC
 `
 
 type QueryDecryptionKeysAndMessageRow struct {
-	Slot      pgtype.Int8
-	TxPointer pgtype.Int8
-	Eon       pgtype.Int8
-	Key       []byte
-	KeyIndex  int64
+	Slot             pgtype.Int8
+	TxPointer        pgtype.Int8
+	Eon              pgtype.Int8
+	Key              []byte
+	IdentityPreimage []byte
+	KeyIndex         int64
 }
 
 func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64) ([]QueryDecryptionKeysAndMessageRow, error) {
@@ -318,6 +319,7 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 			&i.TxPointer,
 			&i.Eon,
 			&i.Key,
+			&i.IdentityPreimage,
 			&i.KeyIndex,
 		); err != nil {
 			return nil, err
