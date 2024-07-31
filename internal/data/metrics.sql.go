@@ -47,17 +47,19 @@ INSERT into decrypted_tx(
 	slot,
 	tx_index,
 	tx_hash,
-	tx_status
+	tx_status,
+	inclusion_duration
 ) 
-VALUES ($1, $2, $3, $4) 
+VALUES ($1, $2, $3, $4, $5) 
 ON CONFLICT DO NOTHING
 `
 
 type CreateDecryptedTXParams struct {
-	Slot     int64
-	TxIndex  int64
-	TxHash   []byte
-	TxStatus TxStatusVal
+	Slot              int64
+	TxIndex           int64
+	TxHash            []byte
+	TxStatus          TxStatusVal
+	InclusionDuration pgtype.Int8
 }
 
 func (q *Queries) CreateDecryptedTX(ctx context.Context, arg CreateDecryptedTXParams) error {
@@ -66,6 +68,7 @@ func (q *Queries) CreateDecryptedTX(ctx context.Context, arg CreateDecryptedTXPa
 		arg.TxIndex,
 		arg.TxHash,
 		arg.TxStatus,
+		arg.InclusionDuration,
 	)
 	return err
 }

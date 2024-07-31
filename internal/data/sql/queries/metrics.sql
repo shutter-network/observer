@@ -83,9 +83,10 @@ INSERT into decrypted_tx(
 	slot,
 	tx_index,
 	tx_hash,
-	tx_status
+	tx_status,
+	inclusion_duration
 ) 
-VALUES ($1, $2, $3, $4) 
+VALUES ($1, $2, $3, $4, $5) 
 ON CONFLICT DO NOTHING;
 
 -- name: QueryDecryptionKeysAndMessage :many

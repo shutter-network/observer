@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -267,11 +269,18 @@ func (tm *TxMapperDB) processTransactionExecution(
 				Msg("comparing tx hash")
 			if decryptedTxHash.Cmp(blockTxHashes[index]) == 0 {
 				// it means we have it in correct order and the transaction is correct
+				txSubEventCreatedAt := txSubEvent.CreatedAt
+				currentTime := time.Now()
+				duration := currentTime.Sub(txSubEventCreatedAt.Time)
 				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 					Slot:     slot,
 					TxIndex:  txSubEvent.TxIndex,
 					TxHash:   decryptedTxHash.Bytes(),
 					TxStatus: data.TxStatusValIncluded,
+					InclusionDuration: pgtype.Int8{
+						Int64: duration.Milliseconds(),
+						Valid: true,
+					},
 				})
 				if err != nil {
 					return err
