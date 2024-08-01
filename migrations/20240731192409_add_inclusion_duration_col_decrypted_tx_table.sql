@@ -6,4 +6,6 @@ ADD COLUMN inclusion_delay BIGINT;
 
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE decrypted_tx
+DROP COLUMN inclusion_delay;
 -- +goose StatementEnd
