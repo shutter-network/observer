@@ -271,14 +271,14 @@ func (tm *TxMapperDB) processTransactionExecution(
 				// it means we have it in correct order and the transaction is correct
 				txSubEventCreatedAt := txSubEvent.CreatedAt
 				currentTime := time.Now()
-				duration := currentTime.Sub(txSubEventCreatedAt.Time)
+				delay := currentTime.Sub(txSubEventCreatedAt.Time)
 				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 					Slot:     slot,
 					TxIndex:  txSubEvent.TxIndex,
 					TxHash:   decryptedTxHash.Bytes(),
 					TxStatus: data.TxStatusValIncluded,
-					InclusionDuration: pgtype.Int8{
-						Int64: duration.Milliseconds(),
+					InclusionDelay: pgtype.Int8{
+						Int64: delay.Milliseconds(),
 						Valid: true,
 					},
 				})

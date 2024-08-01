@@ -84,7 +84,7 @@ INSERT into decrypted_tx(
 	tx_index,
 	tx_hash,
 	tx_status,
-	inclusion_duration
+	inclusion_delay
 ) 
 VALUES ($1, $2, $3, $4, $5) 
 ON CONFLICT DO NOTHING;

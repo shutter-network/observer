@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 ALTER TABLE decrypted_tx
-ADD COLUMN inclusion_duration BIGINT;
+ADD COLUMN inclusion_delay BIGINT;
 -- +goose StatementEnd
 
 -- +goose Down

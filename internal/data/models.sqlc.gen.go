@@ -64,13 +64,13 @@ type Block struct {
 }
 
 type DecryptedTx struct {
-	Slot              int64
-	TxIndex           int64
-	TxHash            []byte
-	TxStatus          TxStatusVal
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	InclusionDuration pgtype.Int8
+	Slot           int64
+	TxIndex        int64
+	TxHash         []byte
+	TxStatus       TxStatusVal
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	InclusionDelay pgtype.Int8
 }
 
 type DecryptionKey struct {
