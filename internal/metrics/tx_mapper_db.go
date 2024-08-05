@@ -210,6 +210,19 @@ func (tm *TxMapperDB) AddBlock(
 	return tx.Commit(ctx)
 }
 
+func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistry(ctx context.Context) (int64, error) {
+	blockNumber, err := tm.dbQuery.QueryBlockNumberFromValidatorRegistry(ctx)
+	if err != nil {
+		return 0, err
+	}
+	switch v := blockNumber.(type) {
+	case int64:
+		return v, nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T", v)
+	}
+}
+
 func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,

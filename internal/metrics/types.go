@@ -57,4 +57,5 @@ type TxMapper interface {
 		ctx context.Context,
 		b *data.Block,
 	) error
+	QueryBlockNumberFromValidatorRegistry(ctx context.Context) (int64, error)
 }

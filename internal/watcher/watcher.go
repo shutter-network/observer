@@ -17,6 +17,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
+	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
@@ -27,19 +28,22 @@ import (
 
 const (
 	//chiado network
-	ChiadoChainID          = 10200
-	ChiadoGenesisTimestamp = 1665396300
-	ChiadoSlotDuration     = 5
+	ChiadoChainID                                = 10200
+	ChiadoGenesisTimestamp                       = 1665396300
+	ChiadoSlotDuration                           = 5
+	ChiadoValidatorRegistryDeploymentBlockNumber = 9884076
 
 	//mainnet network
-	GnosisMainnetChainID          = 100
-	GnosisMainnetGenesisTimestamp = 1638993340
-	GnosisMainnetSlotDuration     = 5
+	GnosisMainnetChainID                         = 100
+	GnosisMainnetGenesisTimestamp                = 1638993340
+	GnosisMainnetSlotDuration                    = 5
+	GnosisValidatorRegistryDeploymentBlockNumber = 9884076
 )
 
 var (
-	GenesisTimestamp int64
-	SlotDuration     int64
+	GenesisTimestamp                       int64
+	SlotDuration                           int64
+	ValidatorRegistryDeploymentBlockNumber int64
 )
 
 type Watcher struct {
@@ -54,6 +58,8 @@ func New(config *common.Config) *Watcher {
 
 func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	txSubmittedEventChannel := make(chan *sequencerBindings.SequencerTransactionSubmitted)
+	validatorRegistryChannel := make(chan *validatorRegistryBindings.ValidatorregistryUpdated)
+
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 	keyShareChannel := make(chan *KeyShareEvent)
@@ -81,8 +87,24 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	}
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
+
+	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistry(ctx)
+	if err != nil {
+		return err
+	}
+
+	var startBlock *uint64
+	if blockNumber == 0 {
+		conv := uint64(ValidatorRegistryDeploymentBlockNumber)
+		startBlock = &conv
+	} else {
+		conv := uint64(blockNumber)
+		startBlock = &conv
+	}
+	validatorRegisterWatcher := NewValidatorRegisteryWatcher(w.config, validatorRegistryChannel, ethClient, startBlock)
+
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher); err != nil {
+	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
 		return err
 	}
 	runner.Go(func() error {
@@ -128,39 +150,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					Int("total decryption keys", len(dd.Keys)).
 					Int64("slot", dd.Slot).
 					Msg("new decryption keys received")
-				// for index, key := range dd.Keys {
-				// 	if index == 0 {
-				// 		continue
-				// 	}
-				// 	err := txMapper.AddDecryptionKeyAndMessage(
-				// 		ctx,
-				// 		&data.DecryptionKey{
-				// 			Eon:              dd.Eon,
-				// 			IdentityPreimage: key.Identity,
-				// 			Key:              key.Key,
-				// 		},
-				// 		&data.DecryptionKeysMessage{
-				// 			Slot:       dd.Slot,
-				// 			InstanceID: dd.InstanceID,
-				// 			Eon:        dd.Eon,
-				// 			TxPointer:  dd.TxPointer,
-				// 		},
-				// 		&data.DecryptionKeysMessageDecryptionKey{
-				// 			DecryptionKeysMessageSlot:     dd.Slot,
-				// 			KeyIndex:                      int64(index) - 1,
-				// 			DecryptionKeyEon:              dd.Eon,
-				// 			DecryptionKeyIdentityPreimage: key.Identity,
-				// 		},
-				// 	)
-				// 	if err != nil {
-				// 		log.Err(err).Msg("err adding decryption data")
-				// 		return err
-				// 	}
-				// 	log.Info().
-				// 		Bytes("decryption keys", key.Key).
-				// 		Int64("slot", dd.Slot).
-				// 		Msg("new decryption key")
-				// }
 			case ks := <-keyShareChannel:
 				for _, share := range ks.Shares {
 					err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
@@ -246,10 +235,12 @@ func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
 	case ChiadoChainID:
 		GenesisTimestamp = ChiadoGenesisTimestamp
 		SlotDuration = ChiadoSlotDuration
+		ValidatorRegistryDeploymentBlockNumber = ChiadoValidatorRegistryDeploymentBlockNumber
 		return nil
 	case GnosisMainnetChainID:
 		GenesisTimestamp = GnosisMainnetGenesisTimestamp
 		SlotDuration = GnosisMainnetSlotDuration
+		ValidatorRegistryDeploymentBlockNumber = GnosisValidatorRegistryDeploymentBlockNumber
 		return nil
 	default:
 		return errors.New("encountered unsupported chain id")

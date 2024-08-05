@@ -100,3 +100,6 @@ WHERE dkm.slot = $1 ORDER BY dkmdk.key_index ASC;
 -- name: QueryTransactionSubmittedEvent :many
 SELECT * FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC;
+
+-- name: QueryBlockNumberFromValidatorRegistry :one
+SELECT max(event_block_number) as max_block_number from validator_registry;

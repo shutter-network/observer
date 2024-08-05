@@ -247,6 +247,17 @@ func (q *Queries) QueryBlockFromSlot(ctx context.Context, slot int64) (Block, er
 	return i, err
 }
 
+const queryBlockNumberFromValidatorRegistry = `-- name: QueryBlockNumberFromValidatorRegistry :one
+SELECT max(event_block_number) as max_block_number from validator_registry
+`
+
+func (q *Queries) QueryBlockNumberFromValidatorRegistry(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRow(ctx, queryBlockNumberFromValidatorRegistry)
+	var max_block_number interface{}
+	err := row.Scan(&max_block_number)
+	return max_block_number, err
+}
+
 const queryDecryptionKeyShare = `-- name: QueryDecryptionKeyShare :many
 SELECT eon, identity_preimage, keyper_index, decryption_key_share, slot, created_at, updated_at FROM decryption_key_share
 WHERE eon = $1 AND identity_preimage = $2 AND keyper_index = $3
