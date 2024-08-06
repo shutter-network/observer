@@ -111,6 +111,10 @@ func (tm *TxMapperMemory) QueryBlockNumberFromValidatorRegistry(ctx context.Cont
 	return maxBlock, nil
 }
 
+func (tm *TxMapperMemory) AddValidatorRegistryEvent(ctx context.Context, vr *data.ValidatorRegistry) error {
+	return nil
+}
+
 func createTransactionSubmittedEventKey(eventBlockHash []byte, eventBlockNumber int64, eventTxIndex int64, eventLogIndex int64) string {
 	return fmt.Sprintf("%x_%d_%d_%d", eventBlockHash, eventBlockNumber, eventTxIndex, eventLogIndex)
 }

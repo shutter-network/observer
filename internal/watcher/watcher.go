@@ -23,6 +23,7 @@ import (
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/validatorregistry"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
@@ -167,6 +168,25 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						Bytes("key shares", share.Share).
 						Int64("slot", ks.Slot).
 						Msg("new key shares")
+				}
+			case vr := <-validatorRegistryChannel:
+				regMessage := &validatorregistry.RegistrationMessage{}
+				err := regMessage.Unmarshal(vr.Message)
+				if err != nil {
+					log.Err(err).Msg("err unmarshalling validator registry message")
+					return err
+				}
+				err = txMapper.AddValidatorRegistryEvent(ctx, &data.ValidatorRegistry{
+					Version:          int64(regMessage.Version),
+					ChainID:          int64(regMessage.ChainID),
+					ValidatorIndex:   int64(regMessage.ValidatorIndex),
+					Nonce:            int64(regMessage.Nonce),
+					IsRegisteration:  regMessage.IsRegistration,
+					EventBlockNumber: int64(vr.Raw.BlockNumber),
+				})
+				if err != nil {
+					log.Err(err).Msg("err adding validator registry")
+					return err
 				}
 			case <-ctx.Done():
 				return ctx.Err()

@@ -88,6 +88,18 @@ INSERT into decrypted_tx(
 VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING;
 
+-- name: CreateValidatorRegistry :exec
+INSERT into validator_registry(
+	version,
+	chain_id,
+	validator_index,
+	nonce,
+	is_registeration,
+	event_block_number
+) 
+VALUES ($1, $2, $3, $4, $5, $6) 
+ON CONFLICT DO NOTHING;
+
 -- name: QueryDecryptionKeysAndMessage :many
 SELECT
     dkm.slot, dkm.tx_pointer, dkm.eon, 

@@ -126,7 +126,6 @@ type ValidatorRegistry struct {
 	ID               int32
 	Version          int64
 	ChainID          int64
-	Sender           []byte
 	ValidatorIndex   int64
 	Nonce            int64
 	IsRegisteration  bool

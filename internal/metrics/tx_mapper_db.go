@@ -223,6 +223,18 @@ func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistry(ctx context.Context)
 	}
 }
 
+func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *data.ValidatorRegistry) error {
+	err := tm.dbQuery.CreateValidatorRegistry(context.Background(), data.CreateValidatorRegistryParams{
+		Version:          vr.Version,
+		ChainID:          vr.ChainID,
+		ValidatorIndex:   vr.ValidatorIndex,
+		Nonce:            vr.Nonce,
+		IsRegisteration:  vr.IsRegisteration,
+		EventBlockNumber: vr.EventBlockNumber,
+	})
+	return err
+}
+
 func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,

@@ -227,6 +227,40 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 	return err
 }
 
+const createValidatorRegistry = `-- name: CreateValidatorRegistry :exec
+INSERT into validator_registry(
+	version,
+	chain_id,
+	validator_index,
+	nonce,
+	is_registeration,
+	event_block_number
+) 
+VALUES ($1, $2, $3, $4, $5, $6) 
+ON CONFLICT DO NOTHING
+`
+
+type CreateValidatorRegistryParams struct {
+	Version          int64
+	ChainID          int64
+	ValidatorIndex   int64
+	Nonce            int64
+	IsRegisteration  bool
+	EventBlockNumber int64
+}
+
+func (q *Queries) CreateValidatorRegistry(ctx context.Context, arg CreateValidatorRegistryParams) error {
+	_, err := q.db.Exec(ctx, createValidatorRegistry,
+		arg.Version,
+		arg.ChainID,
+		arg.ValidatorIndex,
+		arg.Nonce,
+		arg.IsRegisteration,
+		arg.EventBlockNumber,
+	)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
