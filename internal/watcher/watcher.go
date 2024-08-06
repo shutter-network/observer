@@ -182,8 +182,9 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 				regMessage := &validatorregistry.RegistrationMessage{}
 				err := regMessage.Unmarshal(vr.Message)
 				if err != nil {
+					// dont return err incase the message is invalid
 					log.Err(err).Msg("err unmarshalling validator registry message")
-					return err
+					return nil
 				}
 				err = txMapper.AddValidatorRegistryEvent(ctx, &data.ValidatorRegistry{
 					Version:          int64(regMessage.Version),
