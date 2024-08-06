@@ -38,7 +38,7 @@ const (
 	GnosisMainnetChainID                         = 100
 	GnosisMainnetGenesisTimestamp                = 1638993340
 	GnosisMainnetSlotDuration                    = 5
-	GnosisValidatorRegistryDeploymentBlockNumber = 9884076
+	GnosisValidatorRegistryDeploymentBlockNumber = 34627171
 )
 
 var (
@@ -102,8 +102,17 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		conv := uint64(blockNumber)
 		startBlock = &conv
 	}
-	validatorRegisterWatcher := NewValidatorRegisteryWatcher(w.config, validatorRegistryChannel, ethClient, startBlock)
 
+	validatorRegisterWatcher := NewValidatorRegisteryWatcher(w.config, validatorRegistryChannel, ethClient)
+
+	runner.Go(func() error {
+		err = validatorRegisterWatcher.SyncPreviousBlocks(ctx, *startBlock, runner)
+		if err != nil {
+			log.Err(err).Msg("err syncing previous blocks for validator registry")
+			return err
+		}
+		return nil
+	})
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
 		return err
@@ -182,6 +191,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					ValidatorIndex:   int64(regMessage.ValidatorIndex),
 					Nonce:            int64(regMessage.Nonce),
 					IsRegisteration:  regMessage.IsRegistration,
+					Signature:        vr.Signature,
 					EventBlockNumber: int64(vr.Raw.BlockNumber),
 				})
 				if err != nil {

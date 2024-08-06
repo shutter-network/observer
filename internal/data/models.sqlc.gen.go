@@ -129,6 +129,7 @@ type ValidatorRegistry struct {
 	ValidatorIndex   int64
 	Nonce            int64
 	IsRegisteration  bool
+	Signature        []byte
 	EventBlockNumber int64
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz

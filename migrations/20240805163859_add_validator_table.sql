@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS validator_registry
     validator_index             BIGINT NOT NULL,
     nonce                       BIGINT NOT NULL,
     is_registeration            BOOLEAN NOT NULL,
-    event_block_number          BIGINT UNIQUE NOT NULL,
+    signature                   BYTEA NOT NULL,
+    event_block_number          BIGINT NOT NULL,
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
     updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL
 );

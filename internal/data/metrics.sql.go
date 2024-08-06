@@ -234,9 +234,10 @@ INSERT into validator_registry(
 	validator_index,
 	nonce,
 	is_registeration,
+	signature,
 	event_block_number
 ) 
-VALUES ($1, $2, $3, $4, $5, $6) 
+VALUES ($1, $2, $3, $4, $5, $6, $7) 
 ON CONFLICT DO NOTHING
 `
 
@@ -246,6 +247,7 @@ type CreateValidatorRegistryParams struct {
 	ValidatorIndex   int64
 	Nonce            int64
 	IsRegisteration  bool
+	Signature        []byte
 	EventBlockNumber int64
 }
 
@@ -256,6 +258,7 @@ func (q *Queries) CreateValidatorRegistry(ctx context.Context, arg CreateValidat
 		arg.ValidatorIndex,
 		arg.Nonce,
 		arg.IsRegisteration,
+		arg.Signature,
 		arg.EventBlockNumber,
 	)
 	return err

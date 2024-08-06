@@ -5,10 +5,11 @@ import (
 )
 
 type Config struct {
-	RpcURL          string
-	ContractAddress string
-	P2P             *p2p.Config
-	NoDB            bool
+	RpcURL                           string
+	SequencerContractAddress         string
+	ValidatorRegistryContractAddress string
+	P2P                              *p2p.Config
+	NoDB                             bool
 }
 
 type DBConfig struct {

@@ -95,9 +95,10 @@ INSERT into validator_registry(
 	validator_index,
 	nonce,
 	is_registeration,
+	signature,
 	event_block_number
 ) 
-VALUES ($1, $2, $3, $4, $5, $6) 
+VALUES ($1, $2, $3, $4, $5, $6, $7) 
 ON CONFLICT DO NOTHING;
 
 -- name: QueryDecryptionKeysAndMessage :many

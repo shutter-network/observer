@@ -218,6 +218,8 @@ func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistry(ctx context.Context)
 	switch v := blockNumber.(type) {
 	case int64:
 		return v, nil
+	case nil:
+		return 0, nil
 	default:
 		return 0, fmt.Errorf("unexpected type %T", v)
 	}
@@ -230,6 +232,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *data.Va
 		ValidatorIndex:   vr.ValidatorIndex,
 		Nonce:            vr.Nonce,
 		IsRegisteration:  vr.IsRegisteration,
+		Signature:        vr.Signature,
 		EventBlockNumber: vr.EventBlockNumber,
 	})
 	return err
