@@ -74,9 +74,5 @@ func (etw *ValidatorRegisteryWatcher) SyncPreviousBlocks(ctx context.Context, st
 		etw.validatorRegistryChannel <- event
 	}
 
-	if err := events.Error(); err != nil {
-		return err
-	}
-
 	return nil
 }
