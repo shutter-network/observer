@@ -282,10 +282,7 @@ func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) 
 	var keys [][]byte
 	var identities [][]byte
 
-	for index, msg := range p2pMsgs {
-		if index == 0 {
-			continue
-		}
+	for _, msg := range p2pMsgs {
 		keys = append(keys, msg.Key)
 		identities = append(identities, msg.Identity)
 	}

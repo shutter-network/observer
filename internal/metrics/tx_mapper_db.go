@@ -95,7 +95,12 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	if err != nil {
 		return err
 	}
-	totalDecKeysAndMessages := len(decKeysAndMessages.Keys)
+	allTotalDecKeysAndMessages := len(decKeysAndMessages.Keys)
+	if allTotalDecKeysAndMessages > 0 {
+		decKeysAndMessages.Keys = decKeysAndMessages.Keys[1:]
+		decKeysAndMessages.Identities = decKeysAndMessages.Identities[1:]
+	}
+	correctTotalDecKeysAndMessages := len(decKeysAndMessages.Keys)
 
 	block, err := qtx.QueryBlockFromSlot(ctx, decKeysAndMessages.Slot)
 	if err != nil {
@@ -105,13 +110,13 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 			log.Err(err).Msg("unable to commit db transaction")
 			return err
 		}
-		for i := 0; i < totalDecKeysAndMessages; i++ {
+		for i := 0; i < allTotalDecKeysAndMessages; i++ {
 			metricsDecKeyReceived.Inc()
 		}
 		return nil
 	}
 
-	dkam := make([]*DecKeyAndMessage, totalDecKeysAndMessages)
+	dkam := make([]*DecKeyAndMessage, correctTotalDecKeysAndMessages)
 	for index, key := range decKeysAndMessages.Keys {
 		identityPreimage := decKeysAndMessages.Identities[index]
 		dkam[index] = &DecKeyAndMessage{
@@ -124,20 +129,24 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 		}
 	}
 
-	err = tm.processTransactionExecution(ctx, &TxExecution{
-		DecKeysAndMessages: dkam,
-		BlockNumber:        block.BlockNumber,
-	})
-	if err != nil {
-		log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
-		return err
+	if len(dkam) > 0 {
+		err = tm.processTransactionExecution(ctx, &TxExecution{
+			DecKeysAndMessages: dkam,
+			BlockNumber:        block.BlockNumber,
+		})
+		if err != nil {
+			log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
+			return err
+		}
 	}
+
 	err = tx.Commit(ctx)
 	if err != nil {
 		log.Err(err).Msg("unable to commit db transaction")
 		return err
 	}
-	for i := 0; i < totalDecKeysAndMessages; i++ {
+
+	for i := 0; i < allTotalDecKeysAndMessages; i++ {
 		metricsDecKeyReceived.Inc()
 	}
 	return nil
@@ -182,7 +191,11 @@ func (tm *TxMapperDB) AddBlock(
 	if err != nil {
 		return err
 	}
+	if len(decKeysAndMessages) > 0 {
+		decKeysAndMessages = decKeysAndMessages[1:]
+	}
 	totalDecKeysAndMessages := len(decKeysAndMessages)
+
 	if totalDecKeysAndMessages == 0 {
 		log.Debug().Int64("slot", b.Slot).Msg("no decryption keys received yet")
 		return tx.Commit(ctx)
