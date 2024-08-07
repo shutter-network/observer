@@ -23,4 +23,4 @@ ENV MIGRATIONS_PATH=/root/migrations
 EXPOSE 4000
 EXPOSE 23003
 ENTRYPOINT ["./observer"]
-CMD ["start", "--rpc-url", "$RPC_URL", "--contract-address", "$CONTRACT_ADDRESS", "--p2pkey", "$P2P_KEY"]
+CMD ["start", "--rpc-url", "$RPC_URL", "--sequencer-contract-address", "$SEQUENCER_CONTRACT_ADDRESS", "--validator-registry-contract-address","$VALIDATOR_REGISTRY_CONTRACT_ADDRESS", "--p2pkey", "$P2P_KEY"]
