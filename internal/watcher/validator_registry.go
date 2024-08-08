@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
@@ -16,14 +17,14 @@ type ValidatorRegistryWatcher struct {
 	config                   *metricsCommon.Config
 	validatorRegistryChannel chan *validatorRegistryBindings.ValidatorregistryUpdated
 	ethClient                *ethclient.Client
-	startBlock               *uint64
+	startBlock               int64
 }
 
 func NewValidatorRegistryWatcher(
 	config *metricsCommon.Config,
 	validatorRegistryChannel chan *validatorRegistryBindings.ValidatorregistryUpdated,
 	ethClient *ethclient.Client,
-	startBlock *uint64,
+	startBlock int64,
 ) *ValidatorRegistryWatcher {
 	return &ValidatorRegistryWatcher{
 		config:                   config,
@@ -64,7 +65,7 @@ func (vrw *ValidatorRegistryWatcher) Start(ctx context.Context, runner service.R
 			case <-ctx.Done():
 				return ctx.Err()
 			case vruMsg := <-newValidatorRegistryUpdatesMsgs:
-				if vruMsg.Raw.BlockNumber > *vrw.startBlock {
+				if vruMsg.Raw.BlockNumber > uint64(vrw.startBlock) {
 					// process only if block greater then start block
 					// since event have been or will be indexed by syncPreviousBlocks
 					// till startBlock
@@ -82,7 +83,7 @@ func (vrw *ValidatorRegistryWatcher) syncPreviousBlocks(
 	ctx context.Context,
 	validatorRegistryContract *validatorRegistryBindings.Validatorregistry,
 ) error {
-	filterOpts := &bind.FilterOpts{Context: ctx, Start: *vrw.startBlock}
+	filterOpts := &bind.FilterOpts{Context: ctx, Start: uint64(vrw.startBlock)}
 	events, err := validatorRegistryContract.FilterUpdated(filterOpts)
 	if err != nil {
 		return err
@@ -91,6 +92,10 @@ func (vrw *ValidatorRegistryWatcher) syncPreviousBlocks(
 	for events.Next() {
 		event := events.Event
 		vrw.validatorRegistryChannel <- event
+	}
+
+	if events.Error() != nil {
+		return errors.Wrap(events.Error(), "failed to iterate validator registry updated events")
 	}
 
 	return nil

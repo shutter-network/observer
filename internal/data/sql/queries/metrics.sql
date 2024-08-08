@@ -114,5 +114,10 @@ WHERE dkm.slot = $1 ORDER BY dkmdk.key_index ASC;
 SELECT * FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC;
 
--- name: QueryBlockNumberFromValidatorRegistry :one
-SELECT max(event_block_number) as max_block_number from validator_registration_message;
+-- name: CreateValidatorRegistryEventsSyncedUntil :exec
+INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
+ON CONFLICT (enforce_one_row) DO UPDATE
+SET block_hash = $1;
+
+-- name: QueryValidatorRegistryEventsSyncedUntil :one
+SELECT block_number FROM validator_registry_events_synced_until LIMIT 1;

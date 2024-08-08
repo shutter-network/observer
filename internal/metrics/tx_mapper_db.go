@@ -153,7 +153,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 }
 
 func (tm *TxMapperDB) AddKeyShare(ctx context.Context, dks *data.DecryptionKeyShare) error {
-	err := tm.dbQuery.CreateDecryptionKeyShare(context.Background(), data.CreateDecryptionKeyShareParams{
+	err := tm.dbQuery.CreateDecryptionKeyShare(ctx, data.CreateDecryptionKeyShareParams{
 		Eon:                dks.Eon,
 		DecryptionKeyShare: dks.DecryptionKeyShare,
 		Slot:               dks.Slot,
@@ -223,23 +223,22 @@ func (tm *TxMapperDB) AddBlock(
 	return tx.Commit(ctx)
 }
 
-func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistry(ctx context.Context) (int64, error) {
-	blockNumber, err := tm.dbQuery.QueryBlockNumberFromValidatorRegistry(ctx)
+func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
+	blockNumber, err := tm.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {
 		return 0, err
 	}
-	switch v := blockNumber.(type) {
-	case int64:
-		return v, nil
-	case nil:
-		return 0, nil
-	default:
-		return 0, fmt.Errorf("unexpected type %T", v)
-	}
+	return blockNumber, nil
 }
 
 func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *data.ValidatorRegistrationMessage) error {
-	err := tm.dbQuery.CreateValidatorRegistry(context.Background(), data.CreateValidatorRegistryParams{
+	tx, err := tm.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := tm.dbQuery.WithTx(tx)
+	err = qtx.CreateValidatorRegistry(ctx, data.CreateValidatorRegistryParams{
 		Version:          vr.Version,
 		ChainID:          vr.ChainID,
 		ValidatorIndex:   vr.ValidatorIndex,
@@ -248,7 +247,15 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *data.Va
 		Signature:        vr.Signature,
 		EventBlockNumber: vr.EventBlockNumber,
 	})
-	return err
+
+	if err != nil {
+		return err
+	}
+	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, vr.EventBlockNumber)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (tm *TxMapperDB) processTransactionExecution(

@@ -101,7 +101,7 @@ func (tm *TxMapperMemory) AddBlock(
 	return nil
 }
 
-func (tm *TxMapperMemory) QueryBlockNumberFromValidatorRegistry(ctx context.Context) (int64, error) {
+func (tm *TxMapperMemory) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
 	var maxBlock int64
 	for _, data := range tm.ValidatoryRegistry {
 		if data.EventBlockNumber > maxBlock {

@@ -264,6 +264,17 @@ func (q *Queries) CreateValidatorRegistry(ctx context.Context, arg CreateValidat
 	return err
 }
 
+const createValidatorRegistryEventsSyncedUntil = `-- name: CreateValidatorRegistryEventsSyncedUntil :exec
+INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
+ON CONFLICT (enforce_one_row) DO UPDATE
+SET block_hash = $1
+`
+
+func (q *Queries) CreateValidatorRegistryEventsSyncedUntil(ctx context.Context, blockNumber int64) error {
+	_, err := q.db.Exec(ctx, createValidatorRegistryEventsSyncedUntil, blockNumber)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
@@ -282,17 +293,6 @@ func (q *Queries) QueryBlockFromSlot(ctx context.Context, slot int64) (Block, er
 		&i.Slot,
 	)
 	return i, err
-}
-
-const queryBlockNumberFromValidatorRegistry = `-- name: QueryBlockNumberFromValidatorRegistry :one
-SELECT max(event_block_number) as max_block_number from validator_registration_message
-`
-
-func (q *Queries) QueryBlockNumberFromValidatorRegistry(ctx context.Context) (interface{}, error) {
-	row := q.db.QueryRow(ctx, queryBlockNumberFromValidatorRegistry)
-	var max_block_number interface{}
-	err := row.Scan(&max_block_number)
-	return max_block_number, err
 }
 
 const queryDecryptionKeyShare = `-- name: QueryDecryptionKeyShare :many
@@ -421,4 +421,15 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 		return nil, err
 	}
 	return items, nil
+}
+
+const queryValidatorRegistryEventsSyncedUntil = `-- name: QueryValidatorRegistryEventsSyncedUntil :one
+SELECT block_number FROM validator_registry_events_synced_until LIMIT 1
+`
+
+func (q *Queries) QueryValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, queryValidatorRegistryEventsSyncedUntil)
+	var block_number int64
+	err := row.Scan(&block_number)
+	return block_number, err
 }

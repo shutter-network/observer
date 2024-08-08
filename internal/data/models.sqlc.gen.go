@@ -134,3 +134,8 @@ type ValidatorRegistrationMessage struct {
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 }
+
+type ValidatorRegistryEventsSyncedUntil struct {
+	EnforceOneRow bool
+	BlockNumber   int64
+}

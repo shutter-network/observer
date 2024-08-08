@@ -89,26 +89,18 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
 
-	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistry(ctx)
+	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {
 		return err
 	}
 
-	var startBlock *uint64
-	if blockNumber == 0 {
-		conv := uint64(ValidatorRegistryDeploymentBlockNumber)
-		startBlock = &conv
-	} else {
-		conv := uint64(blockNumber)
-		startBlock = &conv
-	}
-
-	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, startBlock)
+	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, blockNumber)
 
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
 		return err
 	}
+
 	runner.Go(func() error {
 		for {
 			select {
@@ -152,6 +144,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					Int("total decryption keys", len(dd.Keys)).
 					Int64("slot", dd.Slot).
 					Msg("new decryption keys received")
+
 			case ks := <-keyShareChannel:
 				for _, share := range ks.Shares {
 					err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
