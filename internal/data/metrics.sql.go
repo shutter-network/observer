@@ -228,7 +228,7 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 }
 
 const createValidatorRegistry = `-- name: CreateValidatorRegistry :exec
-INSERT into validator_registry(
+INSERT into validator_registration_message(
 	version,
 	chain_id,
 	validator_index,
@@ -285,7 +285,7 @@ func (q *Queries) QueryBlockFromSlot(ctx context.Context, slot int64) (Block, er
 }
 
 const queryBlockNumberFromValidatorRegistry = `-- name: QueryBlockNumberFromValidatorRegistry :one
-SELECT max(event_block_number) as max_block_number from validator_registry
+SELECT max(event_block_number) as max_block_number from validator_registration_message
 `
 
 func (q *Queries) QueryBlockNumberFromValidatorRegistry(ctx context.Context) (interface{}, error) {

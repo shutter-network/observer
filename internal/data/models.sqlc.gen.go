@@ -122,7 +122,7 @@ type TransactionSubmittedEvent struct {
 	UpdatedAt            pgtype.Timestamptz
 }
 
-type ValidatorRegistry struct {
+type ValidatorRegistrationMessage struct {
 	ID               int32
 	Version          int64
 	ChainID          int64

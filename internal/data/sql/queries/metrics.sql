@@ -89,7 +89,7 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT DO NOTHING;
 
 -- name: CreateValidatorRegistry :exec
-INSERT into validator_registry(
+INSERT into validator_registration_message(
 	version,
 	chain_id,
 	validator_index,
@@ -115,4 +115,4 @@ SELECT * FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC;
 
 -- name: QueryBlockNumberFromValidatorRegistry :one
-SELECT max(event_block_number) as max_block_number from validator_registry;
+SELECT max(event_block_number) as max_block_number from validator_registration_message;

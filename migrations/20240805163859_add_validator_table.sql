@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE TABLE IF NOT EXISTS validator_registry
+CREATE TABLE IF NOT EXISTS validator_registration_message
 (
     id                          SERIAL PRIMARY KEY,
     version                     BIGINT NOT NULL,
@@ -17,5 +17,5 @@ CREATE TABLE IF NOT EXISTS validator_registry
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TABLE validator_registry;
+DROP TABLE validator_registration_message;
 -- +goose StatementEnd

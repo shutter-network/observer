@@ -103,16 +103,8 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		startBlock = &conv
 	}
 
-	validatorRegisterWatcher := NewValidatorRegisteryWatcher(w.config, validatorRegistryChannel, ethClient)
+	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, startBlock)
 
-	runner.Go(func() error {
-		err = validatorRegisterWatcher.SyncPreviousBlocks(ctx, *startBlock, runner)
-		if err != nil {
-			log.Err(err).Msg("err syncing previous blocks for validator registry")
-			return err
-		}
-		return nil
-	})
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
 	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
 		return err
@@ -186,7 +178,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					log.Err(err).Msg("err unmarshalling validator registry message")
 					return nil
 				}
-				err = txMapper.AddValidatorRegistryEvent(ctx, &data.ValidatorRegistry{
+				err = txMapper.AddValidatorRegistryEvent(ctx, &data.ValidatorRegistrationMessage{
 					Version:          int64(regMessage.Version),
 					ChainID:          int64(regMessage.ChainID),
 					ValidatorIndex:   int64(regMessage.ValidatorIndex),

@@ -58,5 +58,5 @@ type TxMapper interface {
 		b *data.Block,
 	) error
 	QueryBlockNumberFromValidatorRegistry(ctx context.Context) (int64, error)
-	AddValidatorRegistryEvent(ctx context.Context, vr *data.ValidatorRegistry) error
+	AddValidatorRegistryEvent(ctx context.Context, vr *data.ValidatorRegistrationMessage) error
 }

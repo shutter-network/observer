@@ -12,32 +12,46 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
-type ValidatorRegisteryWatcher struct {
+type ValidatorRegistryWatcher struct {
 	config                   *metricsCommon.Config
 	validatorRegistryChannel chan *validatorRegistryBindings.ValidatorregistryUpdated
 	ethClient                *ethclient.Client
+	startBlock               *uint64
 }
 
-func NewValidatorRegisteryWatcher(
+func NewValidatorRegistryWatcher(
 	config *metricsCommon.Config,
 	validatorRegistryChannel chan *validatorRegistryBindings.ValidatorregistryUpdated,
 	ethClient *ethclient.Client,
-) *ValidatorRegisteryWatcher {
-	return &ValidatorRegisteryWatcher{
+	startBlock *uint64,
+) *ValidatorRegistryWatcher {
+	return &ValidatorRegistryWatcher{
 		config:                   config,
 		validatorRegistryChannel: validatorRegistryChannel,
 		ethClient:                ethClient,
+		startBlock:               startBlock,
 	}
 }
 
-func (etw *ValidatorRegisteryWatcher) Start(ctx context.Context, runner service.Runner) error {
-	validatorRegistryContract, err := validatorRegistryBindings.NewValidatorregistry(common.HexToAddress(etw.config.ValidatorRegistryContractAddress), etw.ethClient)
+func (vrw *ValidatorRegistryWatcher) Start(ctx context.Context, runner service.Runner) error {
+	newValidatorRegistryUpdatesMsgs := make(chan *validatorRegistryBindings.ValidatorregistryUpdated)
+	validatorRegistryContract, err := validatorRegistryBindings.NewValidatorregistry(common.HexToAddress(vrw.config.ValidatorRegistryContractAddress), vrw.ethClient)
 	if err != nil {
 		return err
 	}
 
+	//sync previous blocks which have not been processed yet
+	runner.Go(func() error {
+		err = vrw.syncPreviousBlocks(ctx, validatorRegistryContract)
+		if err != nil {
+			log.Err(err).Msg("err syncing previous blocks for validator registry")
+			return err
+		}
+		return nil
+	})
+
 	watchOpts := &bind.WatchOpts{Context: ctx, Start: nil}
-	sub, err := validatorRegistryContract.WatchUpdated(watchOpts, etw.validatorRegistryChannel)
+	sub, err := validatorRegistryContract.WatchUpdated(watchOpts, newValidatorRegistryUpdatesMsgs)
 	if err != nil {
 		return err
 	}
@@ -49,6 +63,13 @@ func (etw *ValidatorRegisteryWatcher) Start(ctx context.Context, runner service.
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case vruMsg := <-newValidatorRegistryUpdatesMsgs:
+				if vruMsg.Raw.BlockNumber > *vrw.startBlock {
+					// process only if block greater then start block
+					// since event have been or will be indexed by syncPreviousBlocks
+					// till startBlock
+					vrw.validatorRegistryChannel <- vruMsg
+				}
 			case err := <-sub.Err():
 				return err
 			}
@@ -57,13 +78,11 @@ func (etw *ValidatorRegisteryWatcher) Start(ctx context.Context, runner service.
 	return nil
 }
 
-func (etw *ValidatorRegisteryWatcher) SyncPreviousBlocks(ctx context.Context, startBlock uint64, runner service.Runner) error {
-	validatorRegistryContract, err := validatorRegistryBindings.NewValidatorregistry(common.HexToAddress(etw.config.ValidatorRegistryContractAddress), etw.ethClient)
-	if err != nil {
-		return err
-	}
-
-	filterOpts := &bind.FilterOpts{Context: ctx, Start: startBlock}
+func (vrw *ValidatorRegistryWatcher) syncPreviousBlocks(
+	ctx context.Context,
+	validatorRegistryContract *validatorRegistryBindings.Validatorregistry,
+) error {
+	filterOpts := &bind.FilterOpts{Context: ctx, Start: *vrw.startBlock}
 	events, err := validatorRegistryContract.FilterUpdated(filterOpts)
 	if err != nil {
 		return err
@@ -71,7 +90,7 @@ func (etw *ValidatorRegisteryWatcher) SyncPreviousBlocks(ctx context.Context, st
 
 	for events.Next() {
 		event := events.Event
-		etw.validatorRegistryChannel <- event
+		vrw.validatorRegistryChannel <- event
 	}
 
 	return nil
