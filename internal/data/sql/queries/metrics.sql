@@ -121,7 +121,7 @@ WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC;
 -- name: CreateValidatorRegistryEventsSyncedUntil :exec
 INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
 ON CONFLICT (enforce_one_row) DO UPDATE
-SET block_hash = $1;
+SET block_number = $1;
 
 -- name: QueryValidatorRegistrationMessageNonceBefore :one 
 SELECT nonce FROM validator_registration_message WHERE validator_index = $1 AND event_block_number <= $2 AND event_tx_index <= $3 AND event_log_index <= $4 ORDER BY event_block_number DESC, event_tx_index DESC, event_log_index DESC FOR UPDATE;

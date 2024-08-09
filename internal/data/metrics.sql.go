@@ -230,7 +230,7 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 const createValidatorRegistryEventsSyncedUntil = `-- name: CreateValidatorRegistryEventsSyncedUntil :exec
 INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
 ON CONFLICT (enforce_one_row) DO UPDATE
-SET block_hash = $1
+SET block_number = $1
 `
 
 func (q *Queries) CreateValidatorRegistryEventsSyncedUntil(ctx context.Context, blockNumber int64) error {

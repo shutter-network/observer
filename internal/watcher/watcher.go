@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
@@ -91,7 +92,11 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 
 	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {
-		return err
+		if err == pgx.ErrNoRows {
+			blockNumber = ValidatorRegistryDeploymentBlockNumber
+		} else {
+			return err
+		}
 	}
 
 	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, blockNumber)
