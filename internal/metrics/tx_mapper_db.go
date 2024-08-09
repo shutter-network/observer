@@ -113,12 +113,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	if err != nil {
 		return err
 	}
-	allTotalDecKeysAndMessages := len(decKeysAndMessages.Keys)
-	if allTotalDecKeysAndMessages > 0 {
-		decKeysAndMessages.Keys = decKeysAndMessages.Keys[1:]
-		decKeysAndMessages.Identities = decKeysAndMessages.Identities[1:]
-	}
-	correctTotalDecKeysAndMessages := len(decKeysAndMessages.Keys)
+	totalDecKeysAndMessages := len(decKeysAndMessages.Keys)
 
 	block, err := qtx.QueryBlockFromSlot(ctx, decKeysAndMessages.Slot)
 	if err != nil {
@@ -128,13 +123,13 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 			log.Err(err).Msg("unable to commit db transaction")
 			return err
 		}
-		for i := 0; i < allTotalDecKeysAndMessages; i++ {
+		for i := 0; i < totalDecKeysAndMessages; i++ {
 			metricsDecKeyReceived.Inc()
 		}
 		return nil
 	}
 
-	dkam := make([]*DecKeyAndMessage, correctTotalDecKeysAndMessages)
+	dkam := make([]*DecKeyAndMessage, totalDecKeysAndMessages)
 	for index, key := range decKeysAndMessages.Keys {
 		identityPreimage := decKeysAndMessages.Identities[index]
 		dkam[index] = &DecKeyAndMessage{
@@ -148,14 +143,15 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	}
 
 	if len(dkam) > 0 {
-		err = tm.processTransactionExecution(ctx, &TxExecution{
-			DecKeysAndMessages: dkam,
-			BlockNumber:        block.BlockNumber,
-		})
-		if err != nil {
-			log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
-			return err
-		}
+		dkam = dkam[1:]
+	}
+	err = tm.processTransactionExecution(ctx, &TxExecution{
+		DecKeysAndMessages: dkam,
+		BlockNumber:        block.BlockNumber,
+	})
+	if err != nil {
+		log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
+		return err
 	}
 
 	err = tx.Commit(ctx)
@@ -164,7 +160,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 		return err
 	}
 
-	for i := 0; i < allTotalDecKeysAndMessages; i++ {
+	for i := 0; i < totalDecKeysAndMessages; i++ {
 		metricsDecKeyReceived.Inc()
 	}
 	return nil
@@ -209,9 +205,7 @@ func (tm *TxMapperDB) AddBlock(
 	if err != nil {
 		return err
 	}
-	if len(decKeysAndMessages) > 0 {
-		decKeysAndMessages = decKeysAndMessages[1:]
-	}
+
 	totalDecKeysAndMessages := len(decKeysAndMessages)
 
 	if totalDecKeysAndMessages == 0 {
@@ -229,6 +223,9 @@ func (tm *TxMapperDB) AddBlock(
 			IdentityPreimage: elem.IdentityPreimage,
 			KeyIndex:         elem.KeyIndex,
 		}
+	}
+	if len(dkam) > 0 {
+		dkam = dkam[1:]
 	}
 	err = tm.processTransactionExecution(ctx, &TxExecution{
 		DecKeysAndMessages: dkam,
@@ -312,7 +309,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 ) error {
 	totalDecKeysAndMessages := len(te.DecKeysAndMessages)
 	if totalDecKeysAndMessages == 0 {
-		return fmt.Errorf("no decryption keys and messages provided")
+		return nil
 	}
 	txSubEvents, err := tm.dbQuery.QueryTransactionSubmittedEvent(ctx, data.QueryTransactionSubmittedEventParams{
 		Eon:     te.DecKeysAndMessages[0].Eon,
