@@ -1,15 +1,26 @@
 -- +goose Up
 -- +goose StatementBegin
+CREATE TYPE validator_registration_validity AS ENUM 
+(
+    'valid', 
+    'invalid message',
+    'invalid signature'
+);
+
 CREATE TABLE IF NOT EXISTS validator_registration_message
 (
     id                          SERIAL PRIMARY KEY,
-    version                     BIGINT NOT NULL,
-    chain_id                    BIGINT NOT NULL,
-    validator_index             BIGINT NOT NULL,
-    nonce                       BIGINT NOT NULL,
-    is_registeration            BOOLEAN NOT NULL,
+    version                     BIGINT,
+    chain_id                    BIGINT,
+    validator_registry_address  BYTEA,
+    validator_index             BIGINT,
+    nonce                       BIGINT,
+    is_registeration            BOOLEAN,
     signature                   BYTEA NOT NULL,
     event_block_number          BIGINT NOT NULL,
+    event_tx_index              BIGINT NOT NULL,
+    event_log_index             BIGINT NOT NULL,
+    validity                    validator_registration_validity NOT NULL,
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
     updated_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL
 );
@@ -23,5 +34,6 @@ CREATE TABLE validator_registry_events_synced_until(
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TYPE validator_registration_validity;
 DROP TABLE validator_registration_message;
 -- +goose StatementEnd

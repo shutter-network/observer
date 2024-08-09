@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
 
@@ -111,7 +112,7 @@ func (tm *TxMapperMemory) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil
 	return maxBlock, nil
 }
 
-func (tm *TxMapperMemory) AddValidatorRegistryEvent(ctx context.Context, vr *data.ValidatorRegistrationMessage) error {
+func (tm *TxMapperMemory) AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error {
 	return nil
 }
 

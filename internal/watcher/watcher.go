@@ -22,8 +22,8 @@ import (
 	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
-	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/validatorregistry"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
@@ -164,22 +164,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						Msg("new key shares")
 				}
 			case vr := <-validatorRegistryChannel:
-				regMessage := &validatorregistry.RegistrationMessage{}
-				err := regMessage.Unmarshal(vr.Message)
-				if err != nil {
-					// dont return err incase the message is invalid
-					log.Err(err).Msg("err unmarshalling validator registry message")
-					return nil
-				}
-				err = txMapper.AddValidatorRegistryEvent(ctx, &data.ValidatorRegistrationMessage{
-					Version:          int64(regMessage.Version),
-					ChainID:          int64(regMessage.ChainID),
-					ValidatorIndex:   int64(regMessage.ValidatorIndex),
-					Nonce:            int64(regMessage.Nonce),
-					IsRegisteration:  regMessage.IsRegistration,
-					Signature:        vr.Signature,
-					EventBlockNumber: int64(vr.Raw.BlockNumber),
-				})
+				err = txMapper.AddValidatorRegistryEvent(ctx, vr)
 				if err != nil {
 					log.Err(err).Msg("err adding validator registry")
 					return err
@@ -236,7 +221,22 @@ func getTxMapperImpl(ctx context.Context, config *common.Config, ethClient *ethc
 		if err != nil {
 			return nil, err
 		}
-		txMapper = metrics.NewTxMapperDB(ctx, db, ethClient)
+		chainID, err := ethClient.ChainID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		beaconAPIClient, err := beaconapiclient.New(config.BeaconAPIURL)
+		if err != nil {
+			return nil, err
+		}
+		txMapper = metrics.NewTxMapperDB(
+			ctx,
+			db,
+			config,
+			ethClient,
+			beaconAPIClient,
+			chainID.Int64(),
+		)
 	}
 	return txMapper, nil
 }

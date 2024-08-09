@@ -53,6 +53,49 @@ func (ns NullTxStatusVal) Value() (driver.Value, error) {
 	return string(ns.TxStatusVal), nil
 }
 
+type ValidatorRegistrationValidity string
+
+const (
+	ValidatorRegistrationValidityValid            ValidatorRegistrationValidity = "valid"
+	ValidatorRegistrationValidityInvalidmessage   ValidatorRegistrationValidity = "invalid message"
+	ValidatorRegistrationValidityInvalidsignature ValidatorRegistrationValidity = "invalid signature"
+)
+
+func (e *ValidatorRegistrationValidity) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ValidatorRegistrationValidity(s)
+	case string:
+		*e = ValidatorRegistrationValidity(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ValidatorRegistrationValidity: %T", src)
+	}
+	return nil
+}
+
+type NullValidatorRegistrationValidity struct {
+	ValidatorRegistrationValidity ValidatorRegistrationValidity
+	Valid                         bool // Valid is true if ValidatorRegistrationValidity is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullValidatorRegistrationValidity) Scan(value interface{}) error {
+	if value == nil {
+		ns.ValidatorRegistrationValidity, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ValidatorRegistrationValidity.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullValidatorRegistrationValidity) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ValidatorRegistrationValidity), nil
+}
+
 type Block struct {
 	BlockHash      []byte
 	BlockNumber    int64
@@ -123,16 +166,20 @@ type TransactionSubmittedEvent struct {
 }
 
 type ValidatorRegistrationMessage struct {
-	ID               int32
-	Version          int64
-	ChainID          int64
-	ValidatorIndex   int64
-	Nonce            int64
-	IsRegisteration  bool
-	Signature        []byte
-	EventBlockNumber int64
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	ID                       int32
+	Version                  pgtype.Int8
+	ChainID                  pgtype.Int8
+	ValidatorRegistryAddress []byte
+	ValidatorIndex           pgtype.Int8
+	Nonce                    pgtype.Int8
+	IsRegisteration          pgtype.Bool
+	Signature                []byte
+	EventBlockNumber         int64
+	EventTxIndex             int64
+	EventLogIndex            int64
+	Validity                 ValidatorRegistrationValidity
+	CreatedAt                pgtype.Timestamptz
+	UpdatedAt                pgtype.Timestamptz
 }
 
 type ValidatorRegistryEventsSyncedUntil struct {

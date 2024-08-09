@@ -6,6 +6,7 @@ import (
 
 type Config struct {
 	RpcURL                           string
+	BeaconAPIURL                     string
 	SequencerContractAddress         string
 	ValidatorRegistryContractAddress string
 	P2P                              *p2p.Config

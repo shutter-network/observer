@@ -227,43 +227,6 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 	return err
 }
 
-const createValidatorRegistry = `-- name: CreateValidatorRegistry :exec
-INSERT into validator_registration_message(
-	version,
-	chain_id,
-	validator_index,
-	nonce,
-	is_registeration,
-	signature,
-	event_block_number
-) 
-VALUES ($1, $2, $3, $4, $5, $6, $7) 
-ON CONFLICT DO NOTHING
-`
-
-type CreateValidatorRegistryParams struct {
-	Version          int64
-	ChainID          int64
-	ValidatorIndex   int64
-	Nonce            int64
-	IsRegisteration  bool
-	Signature        []byte
-	EventBlockNumber int64
-}
-
-func (q *Queries) CreateValidatorRegistry(ctx context.Context, arg CreateValidatorRegistryParams) error {
-	_, err := q.db.Exec(ctx, createValidatorRegistry,
-		arg.Version,
-		arg.ChainID,
-		arg.ValidatorIndex,
-		arg.Nonce,
-		arg.IsRegisteration,
-		arg.Signature,
-		arg.EventBlockNumber,
-	)
-	return err
-}
-
 const createValidatorRegistryEventsSyncedUntil = `-- name: CreateValidatorRegistryEventsSyncedUntil :exec
 INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
 ON CONFLICT (enforce_one_row) DO UPDATE
@@ -272,6 +235,55 @@ SET block_hash = $1
 
 func (q *Queries) CreateValidatorRegistryEventsSyncedUntil(ctx context.Context, blockNumber int64) error {
 	_, err := q.db.Exec(ctx, createValidatorRegistryEventsSyncedUntil, blockNumber)
+	return err
+}
+
+const createValidatorRegistryMessage = `-- name: CreateValidatorRegistryMessage :exec
+INSERT into validator_registration_message(
+	version,
+	chain_id,
+	validator_registry_address,
+	validator_index,
+	nonce,
+	is_registeration,
+	signature,
+	event_block_number,
+	event_tx_index,
+	event_log_index,
+	validity
+) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+ON CONFLICT DO NOTHING
+`
+
+type CreateValidatorRegistryMessageParams struct {
+	Version                  pgtype.Int8
+	ChainID                  pgtype.Int8
+	ValidatorRegistryAddress []byte
+	ValidatorIndex           pgtype.Int8
+	Nonce                    pgtype.Int8
+	IsRegisteration          pgtype.Bool
+	Signature                []byte
+	EventBlockNumber         int64
+	EventTxIndex             int64
+	EventLogIndex            int64
+	Validity                 ValidatorRegistrationValidity
+}
+
+func (q *Queries) CreateValidatorRegistryMessage(ctx context.Context, arg CreateValidatorRegistryMessageParams) error {
+	_, err := q.db.Exec(ctx, createValidatorRegistryMessage,
+		arg.Version,
+		arg.ChainID,
+		arg.ValidatorRegistryAddress,
+		arg.ValidatorIndex,
+		arg.Nonce,
+		arg.IsRegisteration,
+		arg.Signature,
+		arg.EventBlockNumber,
+		arg.EventTxIndex,
+		arg.EventLogIndex,
+		arg.Validity,
+	)
 	return err
 }
 
@@ -421,6 +433,29 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 		return nil, err
 	}
 	return items, nil
+}
+
+const queryValidatorRegistrationMessageNonceBefore = `-- name: QueryValidatorRegistrationMessageNonceBefore :one
+SELECT nonce FROM validator_registration_message WHERE validator_index = $1 AND event_block_number <= $2 AND event_tx_index <= $3 AND event_log_index <= $4 ORDER BY event_block_number DESC, event_tx_index DESC, event_log_index DESC FOR UPDATE
+`
+
+type QueryValidatorRegistrationMessageNonceBeforeParams struct {
+	ValidatorIndex   pgtype.Int8
+	EventBlockNumber int64
+	EventTxIndex     int64
+	EventLogIndex    int64
+}
+
+func (q *Queries) QueryValidatorRegistrationMessageNonceBefore(ctx context.Context, arg QueryValidatorRegistrationMessageNonceBeforeParams) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, queryValidatorRegistrationMessageNonceBefore,
+		arg.ValidatorIndex,
+		arg.EventBlockNumber,
+		arg.EventTxIndex,
+		arg.EventLogIndex,
+	)
+	var nonce pgtype.Int8
+	err := row.Scan(&nonce)
+	return nonce, err
 }
 
 const queryValidatorRegistryEventsSyncedUntil = `-- name: QueryValidatorRegistryEventsSyncedUntil :one

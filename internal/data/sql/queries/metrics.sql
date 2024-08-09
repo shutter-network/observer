@@ -88,17 +88,21 @@ INSERT into decrypted_tx(
 VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING;
 
--- name: CreateValidatorRegistry :exec
+-- name: CreateValidatorRegistryMessage :exec
 INSERT into validator_registration_message(
 	version,
 	chain_id,
+	validator_registry_address,
 	validator_index,
 	nonce,
 	is_registeration,
 	signature,
-	event_block_number
+	event_block_number,
+	event_tx_index,
+	event_log_index,
+	validity
 ) 
-VALUES ($1, $2, $3, $4, $5, $6, $7) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
 ON CONFLICT DO NOTHING;
 
 -- name: QueryDecryptionKeysAndMessage :many
@@ -118,6 +122,9 @@ WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC;
 INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
 ON CONFLICT (enforce_one_row) DO UPDATE
 SET block_hash = $1;
+
+-- name: QueryValidatorRegistrationMessageNonceBefore :one 
+SELECT nonce FROM validator_registration_message WHERE validator_index = $1 AND event_block_number <= $2 AND event_tx_index <= $3 AND event_log_index <= $4 ORDER BY event_block_number DESC, event_tx_index DESC, event_log_index DESC FOR UPDATE;
 
 -- name: QueryValidatorRegistryEventsSyncedUntil :one
 SELECT block_number FROM validator_registry_events_synced_until LIMIT 1;
