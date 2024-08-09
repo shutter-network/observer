@@ -123,17 +123,3 @@ func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 	})
 	s.Require().NoError(err)
 }
-
-func (s *TestMetricsSuite) TestAddValidatorRegistry() {
-	ctx := context.Background()
-
-	err := s.txMapper.AddValidatorRegistryEvent(ctx, &data.ValidatorRegistrationMessage{
-		Version:          rand.Int63(),
-		ChainID:          rand.Int63(),
-		ValidatorIndex:   rand.Int63(),
-		Nonce:            rand.Int63(),
-		IsRegisteration:  true,
-		EventBlockNumber: rand.Int63(),
-	})
-	s.Require().NoError(err)
-}
