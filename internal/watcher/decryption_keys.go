@@ -137,3 +137,15 @@ func getSlotTimestamp(slot int64) int64 {
 func getSlotForBlock(blockHeader *types.Header) int64 {
 	return (int64(blockHeader.Time) - GenesisTimestamp) / SlotDuration
 }
+
+func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) {
+	var keys [][]byte
+	var identities [][]byte
+
+	for _, msg := range p2pMsgs {
+		keys = append(keys, msg.Key)
+		identities = append(identities, msg.Identity)
+	}
+
+	return keys, identities
+}

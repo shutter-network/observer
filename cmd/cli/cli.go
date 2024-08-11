@@ -103,13 +103,6 @@ func Cmd() *cobra.Command {
 	)
 	cmd.MarkPersistentFlagRequired("validator-registry-contract-address")
 
-	cmd.PersistentFlags().BoolVar(
-		&config.NoDB,
-		"no-db",
-		false,
-		"use memory storage instead of database",
-	)
-
 	cmd.PersistentFlags().String("p2pkey", "", "P2P key value (base64 encoded)")
 	viper.BindPFlag("p2pkey", cmd.PersistentFlags().Lookup("p2pkey"))
 	cmd.MarkPersistentFlagRequired("p2pkey")
@@ -122,15 +115,13 @@ func Start() error {
 	ctx := context.Background()
 
 	services := []service.Service{}
-	if !config.NoDB {
-		metrics.EnableMetrics()
-		// TODO: make a decision to add host and port via cli args for metrics
-		metricsServer := metrics.NewMetricsServer(&metricsCommon.MetricsServerConfig{
-			Host: "0.0.0.0",
-			Port: 4000,
-		})
-		services = append(services, metricsServer)
-	}
+	metrics.EnableMetrics()
+	// TODO: make a decision to add host and port via cli args for metrics
+	metricsServer := metrics.NewMetricsServer(&metricsCommon.MetricsServerConfig{
+		Host: "0.0.0.0",
+		Port: 4000,
+	})
+	services = append(services, metricsServer)
 	watcher := watcher.New(&config)
 	services = append(services, watcher)
 	return service.RunWithSighandler(ctx, services...)

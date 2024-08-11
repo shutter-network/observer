@@ -2,20 +2,14 @@ package watcher
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
 	"net"
-	"os"
-	"path"
-	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
-	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
@@ -25,7 +19,6 @@ import (
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
-	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
 const (
@@ -184,65 +177,32 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 
 func getTxMapperImpl(ctx context.Context, config *common.Config, ethClient *ethclient.Client) (metrics.TxMapper, error) {
 	var txMapper metrics.TxMapper
-
-	if config.NoDB {
-		txMapper = metrics.NewTxMapperMemory(ethClient)
-	} else {
-		var (
-			host     = os.Getenv("DB_HOST")
-			port     = os.Getenv("DB_PORT")
-			user     = os.Getenv("DB_USER")
-			password = os.Getenv("DB_PASSWORD")
-			dbName   = os.Getenv("DB_NAME")
-			sslMode  = os.Getenv("DB_SSL_MODE")
-		)
-		dbAddr := fmt.Sprintf("%s:%s", host, port)
-		if sslMode == "" {
-			sslMode = "disable"
-		}
-		databaseURL := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s", user, password, dbAddr, dbName, sslMode)
-		dbConfig := common.DBConfig{
-			DatabaseURL: databaseURL,
-		}
-		db, err := database.NewDB(ctx, &dbConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		migrationConn, err := sql.Open("pgx", databaseURL)
-		if err != nil {
-			return nil, err
-		}
-
-		migrationsPath := os.Getenv("MIGRATIONS_PATH")
-		if migrationsPath == "" {
-			// default to the relative path used in locally
-			_, curFile, _, _ := runtime.Caller(0)
-			curDir := path.Dir(curFile)
-			migrationsPath = curDir + "/../../migrations"
-		}
-
-		err = goose.RunContext(ctx, "up", migrationConn, migrationsPath)
-		if err != nil {
-			return nil, err
-		}
-		chainID, err := ethClient.ChainID(ctx)
-		if err != nil {
-			return nil, err
-		}
-		beaconAPIClient, err := beaconapiclient.New(config.BeaconAPIURL)
-		if err != nil {
-			return nil, err
-		}
-		txMapper = metrics.NewTxMapperDB(
-			ctx,
-			db,
-			config,
-			ethClient,
-			beaconAPIClient,
-			chainID.Int64(),
-		)
+	db, err := database.NewDB(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	err = database.PerformMigration(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	chainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	beaconAPIClient, err := beaconapiclient.New(config.BeaconAPIURL)
+	if err != nil {
+		return nil, err
+	}
+	txMapper = metrics.NewTxMapperDB(
+		ctx,
+		db,
+		config,
+		ethClient,
+		beaconAPIClient,
+		chainID.Int64(),
+	)
 	return txMapper, nil
 }
 
@@ -266,16 +226,4 @@ func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
 	default:
 		return errors.New("encountered unsupported chain id")
 	}
-}
-
-func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) {
-	var keys [][]byte
-	var identities [][]byte
-
-	for _, msg := range p2pMsgs {
-		keys = append(keys, msg.Key)
-		identities = append(identities, msg.Identity)
-	}
-
-	return keys, identities
 }
