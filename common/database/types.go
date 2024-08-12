@@ -6,9 +6,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// This utility function convert uint64 to pgtype.Int8.
-// In the case if data overflows it returns Valid false
-// which means its null in postgres types
+// Uint64ToPgTypeInt8 converts a uint64 to a pgtype.Int8.
+// If the input overflows, it returns a SQL `NULL` value.
 func Uint64ToPgTypeInt8(data uint64) pgtype.Int8 {
 	if data > math.MaxInt64 {
 		return pgtype.Int8{Int64: 0, Valid: false}
