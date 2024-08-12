@@ -19,7 +19,7 @@ services:
       - P2P_DISCOVERY_NAMESPACE=${P2P_DISCOVERY_NAMESPACE}
     ports:
       - "23003:23003"
-    command: ["start", "--rpc-url", "${RPC_URL}", "--contract-address", "${CONTRACT_ADDRESS}", "--p2pkey", "${P2P_KEY}"]
+    command: ["start", "--rpc-url", "${RPC_URL}", "--beacon-api-url", "${BEACON_API_URL}", "--sequencer-contract-address", "${SEQUENCER_CONTRACT_ADDRESS}", "--validator-registry-contract-address", "${VALIDATOR_REGISTRY_CONTRACT_ADDRESS}", "--p2pkey", "${P2P_KEY}"]
 
   db:
     image: postgres:14.12

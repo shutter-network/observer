@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 
+	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 )
 
@@ -57,4 +58,6 @@ type TxMapper interface {
 		ctx context.Context,
 		b *data.Block,
 	) error
+	QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error)
+	AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error
 }

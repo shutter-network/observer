@@ -14,32 +14,38 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
+	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 
 const (
 	//chiado network
-	ChiadoChainID          = 10200
-	ChiadoGenesisTimestamp = 1665396300
-	ChiadoSlotDuration     = 5
+	ChiadoChainID                                = 10200
+	ChiadoGenesisTimestamp                       = 1665396300
+	ChiadoSlotDuration                           = 5
+	ChiadoValidatorRegistryDeploymentBlockNumber = 9884076
 
 	//mainnet network
-	GnosisMainnetChainID          = 100
-	GnosisMainnetGenesisTimestamp = 1638993340
-	GnosisMainnetSlotDuration     = 5
+	GnosisMainnetChainID                         = 100
+	GnosisMainnetGenesisTimestamp                = 1638993340
+	GnosisMainnetSlotDuration                    = 5
+	GnosisValidatorRegistryDeploymentBlockNumber = 34627171
 )
 
 var (
-	GenesisTimestamp int64
-	SlotDuration     int64
+	GenesisTimestamp                       int64
+	SlotDuration                           int64
+	ValidatorRegistryDeploymentBlockNumber int64
 )
 
 type Watcher struct {
@@ -54,6 +60,8 @@ func New(config *common.Config) *Watcher {
 
 func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	txSubmittedEventChannel := make(chan *sequencerBindings.SequencerTransactionSubmitted)
+	validatorRegistryChannel := make(chan *validatorRegistryBindings.ValidatorregistryUpdated)
+
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 	keyShareChannel := make(chan *KeyShareEvent)
@@ -81,10 +89,23 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	}
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
+
+	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			blockNumber = ValidatorRegistryDeploymentBlockNumber
+		} else {
+			return err
+		}
+	}
+
+	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, blockNumber)
+
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher); err != nil {
+	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
 		return err
 	}
+
 	runner.Go(func() error {
 		for {
 			select {
@@ -128,39 +149,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					Int("total decryption keys", len(dd.Keys)).
 					Int64("slot", dd.Slot).
 					Msg("new decryption keys received")
-				// for index, key := range dd.Keys {
-				// 	if index == 0 {
-				// 		continue
-				// 	}
-				// 	err := txMapper.AddDecryptionKeyAndMessage(
-				// 		ctx,
-				// 		&data.DecryptionKey{
-				// 			Eon:              dd.Eon,
-				// 			IdentityPreimage: key.Identity,
-				// 			Key:              key.Key,
-				// 		},
-				// 		&data.DecryptionKeysMessage{
-				// 			Slot:       dd.Slot,
-				// 			InstanceID: dd.InstanceID,
-				// 			Eon:        dd.Eon,
-				// 			TxPointer:  dd.TxPointer,
-				// 		},
-				// 		&data.DecryptionKeysMessageDecryptionKey{
-				// 			DecryptionKeysMessageSlot:     dd.Slot,
-				// 			KeyIndex:                      int64(index) - 1,
-				// 			DecryptionKeyEon:              dd.Eon,
-				// 			DecryptionKeyIdentityPreimage: key.Identity,
-				// 		},
-				// 	)
-				// 	if err != nil {
-				// 		log.Err(err).Msg("err adding decryption data")
-				// 		return err
-				// 	}
-				// 	log.Info().
-				// 		Bytes("decryption keys", key.Key).
-				// 		Int64("slot", dd.Slot).
-				// 		Msg("new decryption key")
-				// }
+
 			case ks := <-keyShareChannel:
 				for _, share := range ks.Shares {
 					err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
@@ -178,6 +167,12 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						Bytes("key shares", share.Share).
 						Int64("slot", ks.Slot).
 						Msg("new key shares")
+				}
+			case vr := <-validatorRegistryChannel:
+				err = txMapper.AddValidatorRegistryEvent(ctx, vr)
+				if err != nil {
+					log.Err(err).Msg("err adding validator registry")
+					return err
 				}
 			case <-ctx.Done():
 				return ctx.Err()
@@ -231,7 +226,22 @@ func getTxMapperImpl(ctx context.Context, config *common.Config, ethClient *ethc
 		if err != nil {
 			return nil, err
 		}
-		txMapper = metrics.NewTxMapperDB(ctx, db, ethClient)
+		chainID, err := ethClient.ChainID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		beaconAPIClient, err := beaconapiclient.New(config.BeaconAPIURL)
+		if err != nil {
+			return nil, err
+		}
+		txMapper = metrics.NewTxMapperDB(
+			ctx,
+			db,
+			config,
+			ethClient,
+			beaconAPIClient,
+			chainID.Int64(),
+		)
 	}
 	return txMapper, nil
 }
@@ -246,10 +256,12 @@ func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
 	case ChiadoChainID:
 		GenesisTimestamp = ChiadoGenesisTimestamp
 		SlotDuration = ChiadoSlotDuration
+		ValidatorRegistryDeploymentBlockNumber = ChiadoValidatorRegistryDeploymentBlockNumber
 		return nil
 	case GnosisMainnetChainID:
 		GenesisTimestamp = GnosisMainnetGenesisTimestamp
 		SlotDuration = GnosisMainnetSlotDuration
+		ValidatorRegistryDeploymentBlockNumber = GnosisValidatorRegistryDeploymentBlockNumber
 		return nil
 	default:
 		return errors.New("encountered unsupported chain id")
@@ -260,10 +272,7 @@ func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) 
 	var keys [][]byte
 	var identities [][]byte
 
-	for index, msg := range p2pMsgs {
-		if index == 0 {
-			continue
-		}
+	for _, msg := range p2pMsgs {
 		keys = append(keys, msg.Key)
 		identities = append(identities, msg.Identity)
 	}

@@ -27,7 +27,7 @@ func NewEncryptedTxWatcher(config *metricsCommon.Config, txSubmittedEventChannel
 }
 
 func (etw *EncryptedTxWatcher) Start(ctx context.Context, runner service.Runner) error {
-	sequencerContract, err := sequencerBindings.NewSequencer(common.HexToAddress(etw.config.ContractAddress), etw.ethClient)
+	sequencerContract, err := sequencerBindings.NewSequencer(common.HexToAddress(etw.config.SequencerContractAddress), etw.ethClient)
 	if err != nil {
 		return err
 	}

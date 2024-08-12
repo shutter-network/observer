@@ -10,6 +10,7 @@ import (
 	"github.com/shutter-network/gnosh-metrics/common"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -41,7 +42,7 @@ func (s *TestMetricsSuite) SetupSuite() {
 
 	// s.txManager = database.NewTxManager(s.testDB.DbInstance)
 
-	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &ethclient.Client{})
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &common.Config{}, &ethclient.Client{}, &beaconapiclient.Client{}, 1)
 	s.dbQuery = data.New(s.testDB.DbInstance)
 }
 

@@ -77,12 +77,31 @@ func Cmd() *cobra.Command {
 	cmd.MarkPersistentFlagRequired("rpc-url")
 
 	cmd.PersistentFlags().StringVar(
-		&config.ContractAddress,
-		"contract-address",
+		&config.BeaconAPIURL,
+		"beacon-api-url",
+		"",
+		"gnosis beacon api url",
+	)
+
+	cmd.MarkPersistentFlagRequired("beacon-api-url")
+
+	cmd.PersistentFlags().StringVarP(
+		&config.SequencerContractAddress,
+		"sequencer-contract-address",
+		"s",
 		"",
 		"sequencer contract address",
 	)
-	cmd.MarkPersistentFlagRequired("contract-address")
+	cmd.MarkPersistentFlagRequired("sequencer-contract-address")
+
+	cmd.PersistentFlags().StringVarP(
+		&config.ValidatorRegistryContractAddress,
+		"validator-registry-contract-address",
+		"v",
+		"",
+		"validator registry contract address",
+	)
+	cmd.MarkPersistentFlagRequired("validator-registry-contract-address")
 
 	cmd.PersistentFlags().BoolVar(
 		&config.NoDB,
