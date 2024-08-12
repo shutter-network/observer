@@ -396,7 +396,6 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 ) (data.ValidatorRegistrationValidity, error) {
 	validity, err := tm.validateValidatorRegistryMessageContents(ctx, vr, regMessage)
 	if err != nil {
-		log.Err(err).Msg("error validating validator registry message contents")
 		return validity, err
 	}
 	if validity == data.ValidatorRegistrationValidityValid {
@@ -404,7 +403,6 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 		// now we need to check for signature verification
 		validity, err = tm.validateBLSSignature(ctx, vr.Signature, regMessage)
 		if err != nil {
-			log.Err(err).Msg("error validating signature")
 			return validity, err
 		}
 	}
