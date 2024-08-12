@@ -271,7 +271,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 
 		params.Validity, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, vr.Signature)
 		if err != nil {
-			log.Err(err).Msg("error validating validator registry message contents")
+			log.Err(err).Msg("error validating validator registry events")
 			return err
 		}
 	}
