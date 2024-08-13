@@ -10,11 +10,6 @@ type Config struct {
 	SequencerContractAddress         string
 	ValidatorRegistryContractAddress string
 	P2P                              *p2p.Config
-	NoDB                             bool
-}
-
-type DBConfig struct {
-	DatabaseURL string
 }
 
 type MetricsServerConfig struct {

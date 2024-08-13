@@ -40,12 +40,6 @@ func (s *TestMetricsSuite) SetupSuite() {
 	migrationsPath := curDir + "/../migrations"
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
-	// s.txManager = database.NewTxManager(s.testDB.DbInstance)
-
 	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &common.Config{}, &ethclient.Client{}, &beaconapiclient.Client{}, 1)
 	s.dbQuery = data.New(s.testDB.DbInstance)
-}
-
-func (s *TestMetricsSuite) BeforeTest(suitName, testName string) {
-	s.txMapper = metrics.NewTxMapperMemory(&ethclient.Client{})
 }
