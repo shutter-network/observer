@@ -393,7 +393,7 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 }
 
 const queryTransactionSubmittedEvent = `-- name: QueryTransactionSubmittedEvent :many
-SELECT event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at FROM transaction_submitted_event
+SELECT event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at, id FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC
 `
 
@@ -424,6 +424,7 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 			&i.EncryptedTransaction,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ID,
 		); err != nil {
 			return nil, err
 		}
