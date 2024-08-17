@@ -87,13 +87,18 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	qtx := tm.dbQuery.WithTx(tx)
 
 	eons, slots, instanceIDs, txPointers, keyIndexes := getDecryptionMessageInfos(decKeysAndMessages)
-	err = qtx.CreateDecryptionKey(ctx, data.CreateDecryptionKeyParams{
+	decryptionKeyIDs, err := qtx.CreateDecryptionKey(ctx, data.CreateDecryptionKeyParams{
 		Column1: eons,
 		Column2: decKeysAndMessages.Identities,
 		Column3: decKeysAndMessages.Keys,
 	})
 	if err != nil {
 		return err
+	}
+	if len(decryptionKeyIDs) == 0 {
+		log.Debug().Int("size-decryptionKeyIDs", len(decryptionKeyIDs)).
+			Msg("no decryption key was added")
+		return nil
 	}
 	err = qtx.CreateDecryptionKeyMessage(ctx, data.CreateDecryptionKeyMessageParams{
 		Column1: slots,
@@ -108,8 +113,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	err = qtx.CreateDecryptionKeysMessageDecryptionKey(ctx, data.CreateDecryptionKeysMessageDecryptionKeyParams{
 		Column1: slots,
 		Column2: keyIndexes,
-		Column3: eons,
-		Column4: decKeysAndMessages.Identities,
+		Column3: decryptionKeyIDs,
 	})
 	if err != nil {
 		return err
@@ -140,6 +144,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 			Key:              key,
 			IdentityPreimage: identityPreimage,
 			KeyIndex:         int64(index),
+			DecryptionKeyID:  decryptionKeyIDs[index],
 		}
 	}
 
@@ -223,6 +228,7 @@ func (tm *TxMapperDB) AddBlock(
 			Key:              elem.Key,
 			IdentityPreimage: elem.IdentityPreimage,
 			KeyIndex:         elem.KeyIndex,
+			DecryptionKeyID:  elem.DecryptionKeyID,
 		}
 	}
 	if len(dkam) > 0 {
@@ -341,6 +347,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 		if err != nil {
 			log.Err(err).Msg("error while trying to get decrypted tx hash")
 		}
+		decryptionKeyID, err := getDecryptionKeyID(txSubEvent, identityPreimageToDecKeyAndMsg)
+		if err != nil {
+			log.Err(err).Msg("error while trying to retrieve decryption key ID")
+		}
 		if index < len(blockTxHashes) {
 			log.Debug().
 				Str("decryptedTXHash", decryptedTxHash.Hex()).
@@ -350,10 +360,12 @@ func (tm *TxMapperDB) processTransactionExecution(
 			if decryptedTxHash.Cmp(blockTxHashes[index]) == 0 {
 				// it means we have it in correct order and the transaction is correct
 				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-					Slot:     slot,
-					TxIndex:  txSubEvent.TxIndex,
-					TxHash:   decryptedTxHash.Bytes(),
-					TxStatus: data.TxStatusValIncluded,
+					Slot:                        slot,
+					TxIndex:                     txSubEvent.TxIndex,
+					TxHash:                      decryptedTxHash.Bytes(),
+					TxStatus:                    data.TxStatusValIncluded,
+					DecryptionKeyID:             pgtype.Int8{Int64: decryptionKeyID, Valid: true},
+					TransactionSubmittedEventID: pgtype.Int8{Int64: txSubEvent.ID, Valid: true},
 				})
 				if err != nil {
 					return err
@@ -361,10 +373,12 @@ func (tm *TxMapperDB) processTransactionExecution(
 			} else {
 				// something went wrong case
 				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-					Slot:     slot,
-					TxIndex:  txSubEvent.TxIndex,
-					TxHash:   decryptedTxHash.Bytes(),
-					TxStatus: data.TxStatusValNotincluded,
+					Slot:                        slot,
+					TxIndex:                     txSubEvent.TxIndex,
+					TxHash:                      decryptedTxHash.Bytes(),
+					TxStatus:                    data.TxStatusValNotincluded,
+					DecryptionKeyID:             pgtype.Int8{Int64: decryptionKeyID, Valid: true},
+					TransactionSubmittedEventID: pgtype.Int8{Int64: txSubEvent.ID, Valid: true},
 				})
 				if err != nil {
 					return err
@@ -527,6 +541,18 @@ func getDecryptedTXHash(
 		return common.Hash{}, err
 	}
 	return tx.Hash(), nil
+}
+
+func getDecryptionKeyID(
+	txSubEvent data.TransactionSubmittedEvent,
+	identityPreimageToDecKeyAndMsg map[string]*DecKeyAndMessage,
+) (int64, error) {
+	identityPreimage := computeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
+	dkam, ok := identityPreimageToDecKeyAndMsg[hex.EncodeToString(identityPreimage)]
+	if !ok {
+		return 0, fmt.Errorf("identity preimage not found %s", hex.EncodeToString(identityPreimage))
+	}
+	return dkam.DecryptionKeyID, nil
 }
 
 func decryptTransaction(key []byte, encrypted []byte) (*types.Transaction, error) {
