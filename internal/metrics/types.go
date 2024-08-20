@@ -40,6 +40,7 @@ type DecKeyAndMessage struct {
 	Key              []byte
 	IdentityPreimage []byte
 	KeyIndex         int64
+	DecryptionKeyID  int64
 }
 
 type TxExecution struct {

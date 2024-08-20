@@ -107,12 +107,14 @@ type Block struct {
 }
 
 type DecryptedTx struct {
-	Slot      int64
-	TxIndex   int64
-	TxHash    []byte
-	TxStatus  TxStatusVal
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	Slot                        int64
+	TxIndex                     int64
+	TxHash                      []byte
+	TxStatus                    TxStatusVal
+	CreatedAt                   pgtype.Timestamptz
+	UpdatedAt                   pgtype.Timestamptz
+	DecryptionKeyID             pgtype.Int8
+	TransactionSubmittedEventID pgtype.Int8
 }
 
 type DecryptionKey struct {
@@ -121,6 +123,7 @@ type DecryptionKey struct {
 	Key              []byte
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
+	ID               int64
 }
 
 type DecryptionKeyShare struct {
@@ -143,12 +146,11 @@ type DecryptionKeysMessage struct {
 }
 
 type DecryptionKeysMessageDecryptionKey struct {
-	DecryptionKeysMessageSlot     int64
-	KeyIndex                      int64
-	DecryptionKeyEon              int64
-	DecryptionKeyIdentityPreimage []byte
-	CreatedAt                     pgtype.Timestamptz
-	UpdatedAt                     pgtype.Timestamptz
+	DecryptionKeysMessageSlot int64
+	KeyIndex                  int64
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
+	DecryptionKeyID           int64
 }
 
 type TransactionSubmittedEvent struct {
@@ -163,6 +165,7 @@ type TransactionSubmittedEvent struct {
 	EncryptedTransaction []byte
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
+	ID                   int64
 }
 
 type ValidatorRegistrationMessage struct {

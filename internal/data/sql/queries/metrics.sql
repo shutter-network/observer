@@ -13,7 +13,7 @@ INSERT into transaction_submitted_event (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT DO NOTHING;
 
--- name: CreateDecryptionKeyMessage :exec
+-- name: CreateDecryptionKeyMessages :exec
 WITH data (slot, instance_id, eon, tx_pointer) AS (
   SELECT 
     unnest($1::BIGINT[]), 
@@ -25,26 +25,29 @@ INSERT INTO decryption_keys_message (slot, instance_id, eon, tx_pointer)
 SELECT * FROM data
 ON CONFLICT DO NOTHING;
 
--- name: CreateDecryptionKey :exec
+-- name: CreateDecryptionKeys :many
 WITH data (eon, identity_preimage, key) AS (
   SELECT 
     unnest($1::BIGINT[]), 
     unnest($2::BYTEA[]), 
     unnest($3::BYTEA[])
+),
+inserted AS (
+  INSERT INTO decryption_key (eon, identity_preimage, key)
+  SELECT * FROM data 
+  ON CONFLICT DO NOTHING
+  RETURNING id
 )
-INSERT INTO decryption_key (eon, identity_preimage, key)
-SELECT * FROM data 
-ON CONFLICT DO NOTHING;
+SELECT * FROM inserted;
 
 -- name: CreateDecryptionKeysMessageDecryptionKey :exec
-WITH data (decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage) AS (
+WITH data (decryption_keys_message_slot, key_index, decryption_key_id) AS (
   SELECT 
     unnest($1::BIGINT[]), 
     unnest($2::BIGINT[]), 
-    unnest($3::BIGINT[]), 
-    unnest($4::BYTEA[])
+    unnest($3::BIGINT[])
 )
-INSERT INTO decryption_keys_message_decryption_key (decryption_keys_message_slot, key_index, decryption_key_eon, decryption_key_identity_preimage)
+INSERT INTO decryption_keys_message_decryption_key (decryption_keys_message_slot, key_index, decryption_key_id)
 SELECT * FROM data
 ON CONFLICT DO NOTHING;
 
@@ -83,9 +86,11 @@ INSERT into decrypted_tx(
 	slot,
 	tx_index,
 	tx_hash,
-	tx_status
+	tx_status,
+	decryption_key_id,
+	transaction_submitted_event_id
 ) 
-VALUES ($1, $2, $3, $4) 
+VALUES ($1, $2, $3, $4, $5, $6) 
 ON CONFLICT DO NOTHING;
 
 -- name: CreateValidatorRegistryMessage :exec
@@ -108,10 +113,11 @@ ON CONFLICT DO NOTHING;
 -- name: QueryDecryptionKeysAndMessage :many
 SELECT
     dkm.slot, dkm.tx_pointer, dkm.eon, 
-    dk.key, dk.identity_preimage, dkmdk.key_index
+    dk.key, dk.identity_preimage, 
+	dkmdk.key_index, dkmdk.decryption_key_id
 FROM decryption_keys_message_decryption_key dkmdk
 LEFT JOIN decryption_keys_message dkm ON dkmdk.decryption_keys_message_slot = dkm.slot
-LEFT JOIN decryption_key dk ON dkmdk.decryption_key_eon = dk.eon AND dkmdk.decryption_key_identity_preimage = dk.identity_preimage
+LEFT JOIN decryption_key dk ON dkmdk.decryption_key_id = dk.id
 WHERE dkm.slot = $1 ORDER BY dkmdk.key_index ASC;
 
 -- name: QueryTransactionSubmittedEvent :many
