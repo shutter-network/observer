@@ -87,7 +87,7 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	qtx := tm.dbQuery.WithTx(tx)
 
 	eons, slots, instanceIDs, txPointers, keyIndexes := getDecryptionMessageInfos(decKeysAndMessages)
-	decryptionKeyIDs, err := qtx.CreateDecryptionKey(ctx, data.CreateDecryptionKeyParams{
+	decryptionKeyIDs, err := qtx.CreateDecryptionKeys(ctx, data.CreateDecryptionKeysParams{
 		Column1: eons,
 		Column2: decKeysAndMessages.Identities,
 		Column3: decKeysAndMessages.Keys,
@@ -96,11 +96,10 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 		return err
 	}
 	if len(decryptionKeyIDs) == 0 {
-		log.Debug().Int("size-decryptionKeyIDs", len(decryptionKeyIDs)).
-			Msg("no decryption key was added")
+		log.Debug().Msg("no decryption key was added")
 		return nil
 	}
-	err = qtx.CreateDecryptionKeyMessage(ctx, data.CreateDecryptionKeyMessageParams{
+	err = qtx.CreateDecryptionKeyMessages(ctx, data.CreateDecryptionKeyMessagesParams{
 		Column1: slots,
 		Column2: instanceIDs,
 		Column3: eons,

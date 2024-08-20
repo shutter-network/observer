@@ -13,7 +13,7 @@ INSERT into transaction_submitted_event (
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT DO NOTHING;
 
--- name: CreateDecryptionKeyMessage :exec
+-- name: CreateDecryptionKeyMessages :exec
 WITH data (slot, instance_id, eon, tx_pointer) AS (
   SELECT 
     unnest($1::BIGINT[]), 
@@ -25,7 +25,7 @@ INSERT INTO decryption_keys_message (slot, instance_id, eon, tx_pointer)
 SELECT * FROM data
 ON CONFLICT DO NOTHING;
 
--- name: CreateDecryptionKey :many
+-- name: CreateDecryptionKeys :many
 WITH data (eon, identity_preimage, key) AS (
   SELECT 
     unnest($1::BIGINT[]), 
