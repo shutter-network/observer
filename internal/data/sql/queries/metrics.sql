@@ -141,5 +141,5 @@ INSERT into validator_status(
 	status
 ) 
 VALUES ($1, $2) 
-ON CONFLICT DO UPDATE
+ON CONFLICT (validator_index) DO UPDATE
 SET status = $2;;

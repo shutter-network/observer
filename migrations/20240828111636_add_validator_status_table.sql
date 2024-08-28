@@ -15,5 +15,4 @@ CREATE TABLE IF NOT EXISTS validator_status
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
 -- +goose StatementEnd
