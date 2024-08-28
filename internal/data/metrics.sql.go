@@ -305,6 +305,26 @@ func (q *Queries) CreateValidatorRegistryMessage(ctx context.Context, arg Create
 	return err
 }
 
+const createValidatorStatus = `-- name: CreateValidatorStatus :exec
+INSERT into validator_status(
+	validator_index,
+	status
+) 
+VALUES ($1, $2) 
+ON CONFLICT DO UPDATE
+SET status = $2
+`
+
+type CreateValidatorStatusParams struct {
+	ValidatorIndex pgtype.Int8
+	Status         string
+}
+
+func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidatorStatusParams) error {
+	_, err := q.db.Exec(ctx, createValidatorStatus, arg.ValidatorIndex, arg.Status)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
