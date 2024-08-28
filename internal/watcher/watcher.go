@@ -10,11 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
@@ -43,11 +43,16 @@ var (
 
 type Watcher struct {
 	config *common.Config
+	db     *pgxpool.Pool
 }
 
-func New(config *common.Config) *Watcher {
+func New(
+	config *common.Config,
+	db *pgxpool.Pool,
+) *Watcher {
 	return &Watcher{
 		config: config,
+		db:     db,
 	}
 }
 
@@ -76,10 +81,24 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	if err != nil {
 		return err
 	}
-	txMapper, err := getTxMapperImpl(ctx, w.config, ethClient)
+	chainID, err := ethClient.ChainID(ctx)
 	if err != nil {
 		return err
 	}
+	beaconAPIClient, err := beaconapiclient.New(w.config.BeaconAPIURL)
+	if err != nil {
+		return err
+	}
+
+	txMapper := metrics.NewTxMapperDB(
+		ctx,
+		w.db,
+		w.config,
+		ethClient,
+		beaconAPIClient,
+		chainID.Int64(),
+	)
+
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
 
@@ -173,37 +192,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		}
 	})
 	return nil
-}
-
-func getTxMapperImpl(ctx context.Context, config *common.Config, ethClient *ethclient.Client) (metrics.TxMapper, error) {
-	var txMapper metrics.TxMapper
-	db, err := database.NewDB(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = database.PerformMigration(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	chainID, err := ethClient.ChainID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	beaconAPIClient, err := beaconapiclient.New(config.BeaconAPIURL)
-	if err != nil {
-		return nil, err
-	}
-	txMapper = metrics.NewTxMapperDB(
-		ctx,
-		db,
-		config,
-		ethClient,
-		beaconAPIClient,
-		chainID.Int64(),
-	)
-	return txMapper, nil
 }
 
 func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {

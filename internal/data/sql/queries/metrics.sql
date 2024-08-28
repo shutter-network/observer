@@ -142,4 +142,8 @@ INSERT into validator_status(
 ) 
 VALUES ($1, $2) 
 ON CONFLICT (validator_index) DO UPDATE
-SET status = $2;;
+SET status = $2;
+
+-- name: QueryValidatorStatuses :many
+SELECT validator_index, status FROM validator_status
+LIMIT $1 OFFSET $2;

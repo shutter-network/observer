@@ -61,4 +61,5 @@ type TxMapper interface {
 	) error
 	QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error)
 	AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error
+	UpdateValidatorStatus(ctx context.Context) error
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -307,6 +309,76 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {
+	batchSize := 100
+	jumpBy := 0
+	numWorkers := 5
+	sem := make(chan struct{}, numWorkers)
+	var wg sync.WaitGroup
+
+	for {
+		// Query a batch of validator statuses
+		validatorStatus, err := tm.dbQuery.QueryValidatorStatuses(ctx, data.QueryValidatorStatusesParams{
+			Limit:  int32(batchSize),
+			Offset: int32(jumpBy),
+		})
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				break
+			}
+			return err
+		}
+
+		if len(validatorStatus) == 0 {
+			break
+		}
+
+		// Launch goroutines to process each status concurrently
+		for _, vs := range validatorStatus {
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(vs data.QueryValidatorStatusesRow) {
+				defer wg.Done()
+				defer func() { <-sem }()
+
+				validatorIndex := uint64(vs.ValidatorIndex.Int64)
+				//TODO: should we keep this log or remove it?
+				log.Debug().Uint64("validatorIndex", validatorIndex).Msg("validator status being updated")
+				validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", validatorIndex)
+				if err != nil {
+					log.Err(err).Uint64("validatorIndex", validatorIndex).Msg("failed to get validator from beacon chain")
+					return
+				}
+				if validator == nil {
+					return
+				}
+
+				err = tm.dbQuery.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+					ValidatorIndex: dbTypes.Uint64ToPgTypeInt8(validatorIndex),
+					Status:         validator.Data.Status,
+				})
+				if err != nil {
+					log.Err(err).Uint64("validatorIndex", validatorIndex).Msg("failed to create validator status")
+					return
+				}
+			}(vs)
+		}
+
+		wg.Wait()
+
+		// Wait for 3 seconds before processing the next batch
+		select {
+		case <-ctx.Done():
+			return ctx.Err() // Handle context cancellation
+		case <-time.After(3 * time.Second):
+		}
+
+		jumpBy += batchSize
+	}
+
+	return nil
 }
 
 func (tm *TxMapperDB) processTransactionExecution(

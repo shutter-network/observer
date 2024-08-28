@@ -510,3 +510,38 @@ func (q *Queries) QueryValidatorRegistryEventsSyncedUntil(ctx context.Context) (
 	err := row.Scan(&block_number)
 	return block_number, err
 }
+
+const queryValidatorStatuses = `-- name: QueryValidatorStatuses :many
+SELECT validator_index, status FROM validator_status
+LIMIT $1 OFFSET $2
+`
+
+type QueryValidatorStatusesParams struct {
+	Limit  int32
+	Offset int32
+}
+
+type QueryValidatorStatusesRow struct {
+	ValidatorIndex pgtype.Int8
+	Status         string
+}
+
+func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidatorStatusesParams) ([]QueryValidatorStatusesRow, error) {
+	rows, err := q.db.Query(ctx, queryValidatorStatuses, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryValidatorStatusesRow
+	for rows.Next() {
+		var i QueryValidatorStatusesRow
+		if err := rows.Scan(&i.ValidatorIndex, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

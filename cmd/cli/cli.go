@@ -11,7 +11,9 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/gnosh-metrics/internal/scheduler"
 	"github.com/shutter-network/gnosh-metrics/internal/watcher"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/encodeable/address"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/encodeable/env"
@@ -122,7 +124,17 @@ func Start() error {
 		Port: 4000,
 	})
 	services = append(services, metricsServer)
-	watcher := watcher.New(&config)
-	services = append(services, watcher)
+	db, err := database.NewDB(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = database.PerformMigration(ctx)
+	if err != nil {
+		return err
+	}
+	watcher := watcher.New(&config, db)
+	scheduler := scheduler.New(&config, db)
+	services = append(services, watcher, scheduler)
 	return service.RunWithSighandler(ctx, services...)
 }
