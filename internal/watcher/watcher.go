@@ -36,9 +36,9 @@ const (
 )
 
 var (
-	GenesisTimestamp                       int64
-	SlotDuration                           int64
-	ValidatorRegistryDeploymentBlockNumber int64
+	GenesisTimestamp                       uint64
+	SlotDuration                           uint64
+	ValidatorRegistryDeploymentBlockNumber uint64
 )
 
 type Watcher struct {
@@ -105,7 +105,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			blockNumber = ValidatorRegistryDeploymentBlockNumber
+			blockNumber = int64(ValidatorRegistryDeploymentBlockNumber)
 		} else {
 			return err
 		}

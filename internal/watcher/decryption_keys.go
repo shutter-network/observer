@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/rs/zerolog/log"
+	"github.com/shutter-network/gnosh-metrics/common/utils"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
@@ -22,10 +22,10 @@ func (pmw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 		TxPointer:  int64(extra.TxPointer),
 	}
 
-	ev, ok := pmw.getBlockFromSlot(int64(extra.Slot))
+	ev, ok := pmw.getBlockReceivedEventFromSlot(extra.Slot)
 	if !ok {
 		if mostRecentBlock, ok := pmw.recentBlocks[pmw.mostRecentBlock]; ok {
-			mostRecentSlot := uint64(getSlotForBlock(mostRecentBlock.Header))
+			mostRecentSlot := uint64(utils.GetSlotForBlock(mostRecentBlock.Header.Time, GenesisTimestamp, SlotDuration))
 			if extra.Slot > mostRecentSlot+1 {
 				log.Warn().
 					Uint64("slot", extra.Slot).
@@ -83,7 +83,7 @@ func (pmw *P2PMsgsWatcher) insertBlock(ctx context.Context, ev *BlockReceivedEve
 		BlockNumber:    ev.Header.Number.Int64(),
 		BlockTimestamp: int64(ev.Header.Time),
 		TxHash:         ev.Header.TxHash[:],
-		Slot:           getSlotForBlock(ev.Header),
+		Slot:           int64(utils.GetSlotForBlock(ev.Header.Time, GenesisTimestamp, SlotDuration)),
 	})
 	if err != nil {
 		log.Err(err).Msg("err adding block")
@@ -106,11 +106,11 @@ func (pmw *P2PMsgsWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 	}
 }
 
-func (pmw *P2PMsgsWatcher) getBlockFromSlot(slot int64) (*BlockReceivedEvent, bool) {
+func (pmw *P2PMsgsWatcher) getBlockReceivedEventFromSlot(slot uint64) (*BlockReceivedEvent, bool) {
 	pmw.recentBlocksMux.Lock()
 	defer pmw.recentBlocksMux.Unlock()
 
-	slotTimestamp := uint64(getSlotTimestamp(slot))
+	slotTimestamp := utils.GetSlotTimestamp(slot, GenesisTimestamp, SlotDuration)
 	if ev, ok := pmw.recentBlocks[pmw.mostRecentBlock]; ok {
 		if ev.Header.Time == slotTimestamp {
 			return ev, ok
@@ -128,14 +128,6 @@ func (pmw *P2PMsgsWatcher) getBlockFromSlot(slot int64) (*BlockReceivedEvent, bo
 	}
 
 	return nil, false
-}
-
-func getSlotTimestamp(slot int64) int64 {
-	return GenesisTimestamp + (slot)*SlotDuration
-}
-
-func getSlotForBlock(blockHeader *types.Header) int64 {
-	return (int64(blockHeader.Time) - GenesisTimestamp) / SlotDuration
 }
 
 func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) {
