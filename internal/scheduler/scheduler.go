@@ -17,9 +17,16 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
+type Job struct {
+	Definition gocron.JobDefinition
+	Task       gocron.Task
+	Options    []gocron.JobOption
+}
+
 type Scheduler struct {
 	config *common.Config
 	db     *pgxpool.Pool
+	jobs   []*Job
 }
 
 func New(
@@ -29,7 +36,12 @@ func New(
 	return &Scheduler{
 		config: config,
 		db:     db,
+		jobs:   []*Job{},
 	}
+}
+
+func (s *Scheduler) AddJob(job *Job) {
+	s.jobs = append(s.jobs, job)
 }
 
 func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
@@ -64,32 +76,22 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 		chainID.Int64(),
 	)
 
+	validatorStatusScheduler := NewValidatorStatusScheduler(txMapper)
+	validatorStatusJob := validatorStatusScheduler.initValidatorStatusJob(ctx)
+	s.AddJob(validatorStatusJob)
+
 	sch, err := gocron.NewScheduler()
 	if err != nil {
 		return err
 	}
-	j, err := sch.NewJob(
-		gocron.CronJob(
-			"0 0 * * *", //run at midnight(12:00 am) each day
-			false,
-		),
-		gocron.NewTask(
-			func(ctx context.Context) error {
-				err := txMapper.UpdateValidatorStatus(ctx)
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-			ctx,
-		),
-	)
+	for _, job := range s.jobs {
+		j, err := sch.NewJob(job.Definition, job.Task, job.Options...)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
+		log.Debug().Str("id", j.ID().String()).Msg("scheduler job")
 	}
-
-	log.Debug().Str("id", j.ID().String()).Msg("scheduler job")
 
 	sch.Start()
 
