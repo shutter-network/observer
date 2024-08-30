@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"context"
+	"errors"
+	"math/big"
 	"net"
 	"time"
 
@@ -15,6 +17,24 @@ import (
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
+)
+
+const (
+	//chiado network
+	ChiadoChainID          = 10200
+	ChiadoGenesisTimestamp = 1665396300
+	ChiadoSlotDuration     = 5
+
+	//mainnet network
+	GnosisMainnetChainID          = 100
+	GnosisMainnetGenesisTimestamp = 1638993340
+	GnosisMainnetSlotDuration     = 5
+)
+
+var (
+	GenesisTimestamp uint64
+	SlotDuration     uint64
+	SlotsPerEpoch    uint64 = 16
 )
 
 type Job struct {
@@ -56,9 +76,12 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 	if err != nil {
 		return err
 	}
-
 	ethClient := ethclient.NewClient(client)
 	chainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return err
+	}
+	err = setNetworkConfig(ctx, chainID)
 	if err != nil {
 		return err
 	}
@@ -79,6 +102,10 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 	validatorStatusScheduler := NewValidatorStatusScheduler(txMapper)
 	validatorStatusJob := validatorStatusScheduler.initValidatorStatusJob(ctx)
 	s.AddJob(validatorStatusJob)
+
+	proposerDutiesScheduler := NewProposerDutiesScheduler(txMapper)
+	proposerDutiesJob := proposerDutiesScheduler.initProposerDutiesJob(ctx)
+	s.AddJob(proposerDutiesJob)
 
 	sch, err := gocron.NewScheduler()
 	if err != nil {
@@ -108,4 +135,19 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 		}
 	})
 	return nil
+}
+
+func setNetworkConfig(ctx context.Context, chainID *big.Int) error {
+	switch chainID.Int64() {
+	case ChiadoChainID:
+		GenesisTimestamp = ChiadoGenesisTimestamp
+		SlotDuration = ChiadoSlotDuration
+		return nil
+	case GnosisMainnetChainID:
+		GenesisTimestamp = GnosisMainnetGenesisTimestamp
+		SlotDuration = GnosisMainnetSlotDuration
+		return nil
+	default:
+		return errors.New("encountered unsupported chain id")
+	}
 }

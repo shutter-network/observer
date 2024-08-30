@@ -147,3 +147,15 @@ SET status = $2;
 -- name: QueryValidatorStatuses :many
 SELECT validator_index, status FROM validator_status
 LIMIT $1 OFFSET $2;
+
+-- name: CreateProposerDuties :exec
+WITH data (public_key, validator_index, slot) AS (
+  SELECT 
+    unnest($1::TEXT[]), 
+    unnest($2::BIGINT[]), 
+    unnest($3::BIGINT[])
+)
+INSERT INTO proposer_duties (public_key, validator_index, slot)
+SELECT * FROM data
+ON CONFLICT DO NOTHING;
+

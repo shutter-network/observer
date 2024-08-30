@@ -202,6 +202,29 @@ func (q *Queries) CreateDecryptionKeysMessageDecryptionKey(ctx context.Context, 
 	return err
 }
 
+const createProposerDuties = `-- name: CreateProposerDuties :exec
+WITH data (public_key, validator_index, slot) AS (
+  SELECT 
+    unnest($1::TEXT[]), 
+    unnest($2::BIGINT[]), 
+    unnest($3::BIGINT[])
+)
+INSERT INTO proposer_duties (public_key, validator_index, slot)
+SELECT public_key, validator_index, slot FROM data
+ON CONFLICT DO NOTHING
+`
+
+type CreateProposerDutiesParams struct {
+	Column1 []string
+	Column2 []int64
+	Column3 []int64
+}
+
+func (q *Queries) CreateProposerDuties(ctx context.Context, arg CreateProposerDutiesParams) error {
+	_, err := q.db.Exec(ctx, createProposerDuties, arg.Column1, arg.Column2, arg.Column3)
+	return err
+}
+
 const createTransactionSubmittedEvent = `-- name: CreateTransactionSubmittedEvent :exec
 INSERT into transaction_submitted_event (
     event_block_hash, 
