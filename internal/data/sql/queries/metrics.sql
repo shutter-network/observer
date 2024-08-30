@@ -134,3 +134,16 @@ SELECT nonce FROM validator_registration_message WHERE validator_index = $1 AND 
 
 -- name: QueryValidatorRegistryEventsSyncedUntil :one
 SELECT block_number FROM validator_registry_events_synced_until LIMIT 1;
+
+-- name: CreateValidatorStatus :exec
+INSERT into validator_status(
+	validator_index,
+	status
+) 
+VALUES ($1, $2) 
+ON CONFLICT (validator_index) DO UPDATE
+SET status = $2;
+
+-- name: QueryValidatorStatuses :many
+SELECT validator_index, status FROM validator_status
+LIMIT $1 OFFSET $2;

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -260,6 +262,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 	defer tx.Rollback(ctx)
 	qtx := tm.dbQuery.WithTx(tx)
 
+	var validator *beaconapiclient.GetValidatorByIndexResponse
 	regMessage := &validatorregistry.RegistrationMessage{}
 	params := data.CreateValidatorRegistryMessageParams{}
 	err = regMessage.Unmarshal(vr.Message)
@@ -273,11 +276,22 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		params.ValidatorIndex = dbTypes.Uint64ToPgTypeInt8(regMessage.ValidatorIndex)
 		params.Nonce = dbTypes.Uint64ToPgTypeInt8(regMessage.Nonce)
 		params.IsRegisteration = dbTypes.BoolToPgTypeBool(regMessage.IsRegistration)
-
-		params.Validity, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, vr.Signature)
+		params.Validity, validator, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, vr.Signature)
 		if err != nil {
 			log.Err(err).Msg("error validating validator registry events")
 			return err
+		}
+	}
+
+	if params.Validity == data.ValidatorRegistrationValidityValid {
+		if validator != nil {
+			err := qtx.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+				ValidatorIndex: dbTypes.Uint64ToPgTypeInt8(regMessage.ValidatorIndex),
+				Status:         validator.Data.Status,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -295,6 +309,76 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {
+	batchSize := 100
+	jumpBy := 0
+	numWorkers := 5
+	sem := make(chan struct{}, numWorkers)
+	var wg sync.WaitGroup
+
+	for {
+		// Query a batch of validator statuses
+		validatorStatus, err := tm.dbQuery.QueryValidatorStatuses(ctx, data.QueryValidatorStatusesParams{
+			Limit:  int32(batchSize),
+			Offset: int32(jumpBy),
+		})
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				break
+			}
+			return err
+		}
+
+		if len(validatorStatus) == 0 {
+			break
+		}
+
+		// Launch goroutines to process each status concurrently
+		for _, vs := range validatorStatus {
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(vs data.QueryValidatorStatusesRow) {
+				defer wg.Done()
+				defer func() { <-sem }()
+
+				validatorIndex := uint64(vs.ValidatorIndex.Int64)
+				//TODO: should we keep this log or remove it?
+				log.Debug().Uint64("validatorIndex", validatorIndex).Msg("validator status being updated")
+				validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", validatorIndex)
+				if err != nil {
+					log.Err(err).Uint64("validatorIndex", validatorIndex).Msg("failed to get validator from beacon chain")
+					return
+				}
+				if validator == nil {
+					return
+				}
+
+				err = tm.dbQuery.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+					ValidatorIndex: dbTypes.Uint64ToPgTypeInt8(validatorIndex),
+					Status:         validator.Data.Status,
+				})
+				if err != nil {
+					log.Err(err).Uint64("validatorIndex", validatorIndex).Msg("failed to create validator status")
+					return
+				}
+			}(vs)
+		}
+
+		wg.Wait()
+
+		// Wait for 3 seconds before processing the next batch
+		select {
+		case <-ctx.Done():
+			return ctx.Err() // Handle context cancellation
+		case <-time.After(3 * time.Second):
+		}
+
+		jumpBy += batchSize
+	}
+
+	return nil
 }
 
 func (tm *TxMapperDB) processTransactionExecution(
@@ -406,20 +490,24 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 	vr *validatorRegistryBindings.ValidatorregistryUpdated,
 	regMessage *validatorregistry.RegistrationMessage,
 	blsSignature []byte,
-) (data.ValidatorRegistrationValidity, error) {
+) (data.ValidatorRegistrationValidity, *beaconapiclient.GetValidatorByIndexResponse, error) {
 	validity, err := tm.validateValidatorRegistryMessageContents(ctx, vr, regMessage)
 	if err != nil {
-		return validity, err
+		return validity, nil, err
+	}
+	validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", regMessage.ValidatorIndex)
+	if err != nil {
+		return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "failed to get validator %d", regMessage.ValidatorIndex)
 	}
 	if validity == data.ValidatorRegistrationValidityValid {
 		// which means message have been validated and all were passed
 		// now we need to check for signature verification
-		validity, err = tm.validateBLSSignature(ctx, vr.Signature, regMessage)
+		validity, err = tm.validateBLSSignature(ctx, vr.Signature, regMessage, validator)
 		if err != nil {
-			return validity, err
+			return validity, nil, err
 		}
 	}
-	return validity, nil
+	return validity, validator, nil
 }
 
 func (tm *TxMapperDB) validateValidatorRegistryMessageContents(
@@ -470,12 +558,9 @@ func (tm *TxMapperDB) validateBLSSignature(
 	ctx context.Context,
 	blsSignature []byte,
 	msg *validatorregistry.RegistrationMessage,
+	validator *beaconapiclient.GetValidatorByIndexResponse,
 ) (data.ValidatorRegistrationValidity, error) {
 	validity := data.ValidatorRegistrationValidityValid
-	validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", msg.ValidatorIndex)
-	if err != nil {
-		return data.ValidatorRegistrationValidityInvalidsignature, errors.Wrapf(err, "failed to get validator %d", msg.ValidatorIndex)
-	}
 	if validator == nil {
 		//since validator is nil its signature is invalid automatically
 		validity = data.ValidatorRegistrationValidityInvalidsignature

@@ -189,3 +189,11 @@ type ValidatorRegistryEventsSyncedUntil struct {
 	EnforceOneRow bool
 	BlockNumber   int64
 }
+
+type ValidatorStatus struct {
+	ID             int32
+	ValidatorIndex pgtype.Int8
+	Status         string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}

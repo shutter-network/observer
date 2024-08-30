@@ -305,6 +305,26 @@ func (q *Queries) CreateValidatorRegistryMessage(ctx context.Context, arg Create
 	return err
 }
 
+const createValidatorStatus = `-- name: CreateValidatorStatus :exec
+INSERT into validator_status(
+	validator_index,
+	status
+) 
+VALUES ($1, $2) 
+ON CONFLICT (validator_index) DO UPDATE
+SET status = $2
+`
+
+type CreateValidatorStatusParams struct {
+	ValidatorIndex pgtype.Int8
+	Status         string
+}
+
+func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidatorStatusParams) error {
+	_, err := q.db.Exec(ctx, createValidatorStatus, arg.ValidatorIndex, arg.Status)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
@@ -489,4 +509,39 @@ func (q *Queries) QueryValidatorRegistryEventsSyncedUntil(ctx context.Context) (
 	var block_number int64
 	err := row.Scan(&block_number)
 	return block_number, err
+}
+
+const queryValidatorStatuses = `-- name: QueryValidatorStatuses :many
+SELECT validator_index, status FROM validator_status
+LIMIT $1 OFFSET $2
+`
+
+type QueryValidatorStatusesParams struct {
+	Limit  int32
+	Offset int32
+}
+
+type QueryValidatorStatusesRow struct {
+	ValidatorIndex pgtype.Int8
+	Status         string
+}
+
+func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidatorStatusesParams) ([]QueryValidatorStatusesRow, error) {
+	rows, err := q.db.Query(ctx, queryValidatorStatuses, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryValidatorStatusesRow
+	for rows.Next() {
+		var i QueryValidatorStatusesRow
+		if err := rows.Scan(&i.ValidatorIndex, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
