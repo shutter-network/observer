@@ -6,7 +6,7 @@ ALTER TABLE decryption_keys_message_decryption_key
 DROP CONSTRAINT decryption_keys_message_decry_decryption_key_eon_decryptio_fkey;
 
 ALTER TABLE decryption_keys_message_decryption_key
-DROP CONSTRAINT decryption_keys_message_decry_decryption_key_eon_decryptio_fkey;
+DROP CONSTRAINT decryption_keys_message_decry_decryption_keys_message_slot_fkey;
 
 -- Drop the existing PK constraint.
 ALTER TABLE decryption_key
