@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"context"
+	"errors"
+	"math/big"
 	"net"
 	"time"
 
@@ -17,9 +19,34 @@ import (
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
+const (
+	//chiado network
+	ChiadoChainID          = 10200
+	ChiadoGenesisTimestamp = 1665396300
+	ChiadoSlotDuration     = 5
+
+	//mainnet network
+	GnosisMainnetChainID          = 100
+	GnosisMainnetGenesisTimestamp = 1638993340
+	GnosisMainnetSlotDuration     = 5
+)
+
+var (
+	GenesisTimestamp uint64
+	SlotDuration     uint64
+	SlotsPerEpoch    uint64 = 16
+)
+
+type Job struct {
+	Definition gocron.JobDefinition
+	Task       gocron.Task
+	Options    []gocron.JobOption
+}
+
 type Scheduler struct {
 	config *common.Config
 	db     *pgxpool.Pool
+	jobs   []*Job
 }
 
 func New(
@@ -29,7 +56,12 @@ func New(
 	return &Scheduler{
 		config: config,
 		db:     db,
+		jobs:   []*Job{},
 	}
+}
+
+func (s *Scheduler) AddJob(job *Job) {
+	s.jobs = append(s.jobs, job)
 }
 
 func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
@@ -44,9 +76,12 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 	if err != nil {
 		return err
 	}
-
 	ethClient := ethclient.NewClient(client)
 	chainID, err := ethClient.ChainID(ctx)
+	if err != nil {
+		return err
+	}
+	err = setNetworkConfig(ctx, chainID)
 	if err != nil {
 		return err
 	}
@@ -64,32 +99,26 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 		chainID.Int64(),
 	)
 
+	validatorStatusScheduler := NewValidatorStatusScheduler(txMapper)
+	validatorStatusJob := validatorStatusScheduler.initValidatorStatusJob(ctx)
+	s.AddJob(validatorStatusJob)
+
+	proposerDutiesScheduler := NewProposerDutiesScheduler(txMapper)
+	proposerDutiesJob := proposerDutiesScheduler.initProposerDutiesJob(ctx)
+	s.AddJob(proposerDutiesJob)
+
 	sch, err := gocron.NewScheduler()
 	if err != nil {
 		return err
 	}
-	j, err := sch.NewJob(
-		gocron.CronJob(
-			"0 0 * * *", //run at midnight(12:00 am) each day
-			false,
-		),
-		gocron.NewTask(
-			func(ctx context.Context) error {
-				err := txMapper.UpdateValidatorStatus(ctx)
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-			ctx,
-		),
-	)
+	for _, job := range s.jobs {
+		j, err := sch.NewJob(job.Definition, job.Task, job.Options...)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
+		log.Debug().Str("id", j.ID().String()).Msg("scheduler job")
 	}
-
-	log.Debug().Str("id", j.ID().String()).Msg("scheduler job")
 
 	sch.Start()
 
@@ -106,4 +135,19 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 		}
 	})
 	return nil
+}
+
+func setNetworkConfig(ctx context.Context, chainID *big.Int) error {
+	switch chainID.Int64() {
+	case ChiadoChainID:
+		GenesisTimestamp = ChiadoGenesisTimestamp
+		SlotDuration = ChiadoSlotDuration
+		return nil
+	case GnosisMainnetChainID:
+		GenesisTimestamp = GnosisMainnetGenesisTimestamp
+		SlotDuration = GnosisMainnetSlotDuration
+		return nil
+	default:
+		return errors.New("encountered unsupported chain id")
+	}
 }

@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"errors"
+	"math/big"
 	"net"
 	"time"
 
@@ -36,9 +37,9 @@ const (
 )
 
 var (
-	GenesisTimestamp                       int64
-	SlotDuration                           int64
-	ValidatorRegistryDeploymentBlockNumber int64
+	GenesisTimestamp                       uint64
+	SlotDuration                           uint64
+	ValidatorRegistryDeploymentBlockNumber uint64
 )
 
 type Watcher struct {
@@ -77,11 +78,11 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	}
 
 	ethClient := ethclient.NewClient(client)
-	err = setNetworkConfig(ctx, ethClient)
+	chainID, err := ethClient.ChainID(ctx)
 	if err != nil {
 		return err
 	}
-	chainID, err := ethClient.ChainID(ctx)
+	err = setNetworkConfig(ctx, chainID)
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			blockNumber = ValidatorRegistryDeploymentBlockNumber
+			blockNumber = int64(ValidatorRegistryDeploymentBlockNumber)
 		} else {
 			return err
 		}
@@ -194,12 +195,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	return nil
 }
 
-func setNetworkConfig(ctx context.Context, ethClient *ethclient.Client) error {
-	chainID, err := ethClient.ChainID(ctx)
-	if err != nil {
-		return err
-	}
-
+func setNetworkConfig(ctx context.Context, chainID *big.Int) error {
 	switch chainID.Int64() {
 	case ChiadoChainID:
 		GenesisTimestamp = ChiadoGenesisTimestamp

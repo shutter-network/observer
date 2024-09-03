@@ -381,6 +381,35 @@ func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {
 	return nil
 }
 
+func (tm *TxMapperDB) AddProposerDuties(ctx context.Context, epoch uint64) error {
+	proposerDuties, err := tm.beaconAPIClient.GetProposerDutiesByEpoch(ctx, epoch)
+	if err != nil {
+		return err
+	}
+	if proposerDuties == nil {
+		return errors.Errorf("no proposer duties found for epoch %d", epoch)
+	}
+
+	log.Info().Uint64("epoch", epoch).Msg("processing proposer duties")
+
+	publicKeys := make([]string, len(proposerDuties.Data))
+	validatorIndices := make([]int64, len(proposerDuties.Data))
+	slots := make([]int64, len(proposerDuties.Data))
+
+	for i := 0; i < len(proposerDuties.Data); i++ {
+		publicKeys[i] = proposerDuties.Data[i].Pubkey
+		validatorIndices[i] = int64(proposerDuties.Data[i].ValidatorIndex)
+		slots[i] = int64(proposerDuties.Data[i].Slot)
+	}
+
+	err = tm.dbQuery.CreateProposerDuties(ctx, data.CreateProposerDutiesParams{
+		Column1: publicKeys,
+		Column2: validatorIndices,
+		Column3: slots,
+	})
+	return err
+}
+
 func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,

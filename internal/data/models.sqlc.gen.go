@@ -153,6 +153,15 @@ type DecryptionKeysMessageDecryptionKey struct {
 	DecryptionKeyID           int64
 }
 
+type ProposerDuty struct {
+	ID             int32
+	PublicKey      string
+	ValidatorIndex int64
+	Slot           int64
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type TransactionSubmittedEvent struct {
 	EventBlockHash       []byte
 	EventBlockNumber     int64
