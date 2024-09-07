@@ -60,8 +60,8 @@ type CreateDecryptedTXParams struct {
 	TxIndex                     int64
 	TxHash                      []byte
 	TxStatus                    TxStatusVal
-	DecryptionKeyID             pgtype.Int8
-	TransactionSubmittedEventID pgtype.Int8
+	DecryptionKeyID             int64
+	TransactionSubmittedEventID int64
 }
 
 func (q *Queries) CreateDecryptedTX(ctx context.Context, arg CreateDecryptedTXParams) error {
@@ -457,7 +457,7 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 }
 
 const queryTransactionSubmittedEvent = `-- name: QueryTransactionSubmittedEvent :many
-SELECT event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at, id FROM transaction_submitted_event
+SELECT id, event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC
 `
 
@@ -477,6 +477,7 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 	for rows.Next() {
 		var i TransactionSubmittedEvent
 		if err := rows.Scan(
+			&i.ID,
 			&i.EventBlockHash,
 			&i.EventBlockNumber,
 			&i.EventTxIndex,
@@ -488,7 +489,6 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 			&i.EncryptedTransaction,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.ID,
 		); err != nil {
 			return nil, err
 		}

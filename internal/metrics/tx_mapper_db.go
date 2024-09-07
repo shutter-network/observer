@@ -279,7 +279,6 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		params.Validity, validator, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, vr.Signature)
 		if err != nil {
 			log.Err(err).Msg("error validating validator registry events")
-			return err
 		}
 	}
 
@@ -476,8 +475,8 @@ func (tm *TxMapperDB) processTransactionExecution(
 					TxIndex:                     txSubEvent.TxIndex,
 					TxHash:                      decryptedTxHash.Bytes(),
 					TxStatus:                    data.TxStatusValIncluded,
-					DecryptionKeyID:             pgtype.Int8{Int64: decryptionKeyID, Valid: true},
-					TransactionSubmittedEventID: pgtype.Int8{Int64: txSubEvent.ID, Valid: true},
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEvent.ID,
 				})
 				if err != nil {
 					return err
@@ -489,8 +488,8 @@ func (tm *TxMapperDB) processTransactionExecution(
 					TxIndex:                     txSubEvent.TxIndex,
 					TxHash:                      decryptedTxHash.Bytes(),
 					TxStatus:                    data.TxStatusValNotincluded,
-					DecryptionKeyID:             pgtype.Int8{Int64: decryptionKeyID, Valid: true},
-					TransactionSubmittedEventID: pgtype.Int8{Int64: txSubEvent.ID, Valid: true},
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEvent.ID,
 				})
 				if err != nil {
 					return err
