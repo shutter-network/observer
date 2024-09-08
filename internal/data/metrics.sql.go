@@ -235,9 +235,10 @@ INSERT into transaction_submitted_event (
 	tx_index,
 	identity_prefix,
 	sender,
-	encrypted_transaction
+	encrypted_transaction,
+	event_tx_hash
 ) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT DO NOTHING
 `
 
@@ -251,6 +252,7 @@ type CreateTransactionSubmittedEventParams struct {
 	IdentityPrefix       []byte
 	Sender               []byte
 	EncryptedTransaction []byte
+	EventTxHash          []byte
 }
 
 func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg CreateTransactionSubmittedEventParams) error {
@@ -264,6 +266,7 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 		arg.IdentityPrefix,
 		arg.Sender,
 		arg.EncryptedTransaction,
+		arg.EventTxHash,
 	)
 	return err
 }
@@ -457,7 +460,7 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 }
 
 const queryTransactionSubmittedEvent = `-- name: QueryTransactionSubmittedEvent :many
-SELECT id, event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at FROM transaction_submitted_event
+SELECT id, event_block_hash, event_block_number, event_tx_index, event_log_index, eon, tx_index, identity_prefix, sender, encrypted_transaction, created_at, updated_at, event_tx_hash FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC
 `
 
@@ -489,6 +492,7 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 			&i.EncryptedTransaction,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EventTxHash,
 		); err != nil {
 			return nil, err
 		}

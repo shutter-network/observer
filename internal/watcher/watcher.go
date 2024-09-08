@@ -133,6 +133,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					IdentityPrefix:       txEvent.IdentityPrefix[:],
 					Sender:               txEvent.Sender[:],
 					EncryptedTransaction: txEvent.EncryptedTransaction,
+					EventTxHash:          txEvent.Raw.TxHash[:],
 				})
 				if err != nil {
 					log.Err(err).Msg("err adding encrypting transaction")

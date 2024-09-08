@@ -66,6 +66,7 @@ func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tse *dat
 		IdentityPrefix:       tse.IdentityPrefix,
 		Sender:               tse.Sender,
 		EncryptedTransaction: tse.EncryptedTransaction,
+		EventTxHash:          tse.EventTxHash,
 	})
 	if err != nil {
 		return err

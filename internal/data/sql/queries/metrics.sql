@@ -8,9 +8,10 @@ INSERT into transaction_submitted_event (
 	tx_index,
 	identity_prefix,
 	sender,
-	encrypted_transaction
+	encrypted_transaction,
+	event_tx_hash
 ) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT DO NOTHING;
 
 -- name: CreateDecryptionKeyMessages :exec
