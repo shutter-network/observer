@@ -5,7 +5,7 @@ DELETE FROM validator_registry_events_synced_until;
 
 CREATE TABLE IF NOT EXISTS validator_status
 (
-    id                          SERIAL PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
     validator_index             BIGINT UNIQUE,
     status                      TEXT NOT NULL,
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,

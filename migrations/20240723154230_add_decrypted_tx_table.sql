@@ -10,7 +10,7 @@ CREATE TYPE tx_status_val AS ENUM
 
 CREATE TABLE IF NOT EXISTS decrypted_tx
 (
-    id                                  SERIAL PRIMARY KEY,
+    id                                  BIGSERIAL PRIMARY KEY,
     slot                                BIGINT NOT NULL,
     tx_index                            BIGINT NOT NULL,
     tx_hash                             BYTEA NOT NULL,

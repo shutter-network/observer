@@ -500,10 +500,12 @@ func (tm *TxMapperDB) processTransactionExecution(
 			log.Debug().Str("txHash", decryptedTxHash.Hex()).
 				Msg("decryptedTXHash (missing block transaction)")
 			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-				Slot:     slot,
-				TxIndex:  txSubEvent.TxIndex,
-				TxHash:   decryptedTxHash.Bytes(),
-				TxStatus: data.TxStatusValNotincluded,
+				Slot:                        slot,
+				TxIndex:                     txSubEvent.TxIndex,
+				TxHash:                      decryptedTxHash.Bytes(),
+				TxStatus:                    data.TxStatusValNotincluded,
+				DecryptionKeyID:             decryptionKeyID,
+				TransactionSubmittedEventID: txSubEvent.ID,
 			})
 			if err != nil {
 				return err

@@ -9,7 +9,7 @@ CREATE TYPE validator_registration_validity AS ENUM
 
 CREATE TABLE IF NOT EXISTS validator_registration_message
 (
-    id                          SERIAL PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
     version                     BIGINT,
     chain_id                    BIGINT,
     validator_registry_address  BYTEA,

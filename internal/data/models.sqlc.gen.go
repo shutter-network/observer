@@ -155,7 +155,7 @@ type DecryptionKeysMessageDecryptionKey struct {
 }
 
 type ProposerDuty struct {
-	ID             int32
+	ID             int64
 	PublicKey      string
 	ValidatorIndex int64
 	Slot           int64
@@ -179,7 +179,7 @@ type TransactionSubmittedEvent struct {
 }
 
 type ValidatorRegistrationMessage struct {
-	ID                       int32
+	ID                       int64
 	Version                  pgtype.Int8
 	ChainID                  pgtype.Int8
 	ValidatorRegistryAddress []byte
@@ -201,7 +201,7 @@ type ValidatorRegistryEventsSyncedUntil struct {
 }
 
 type ValidatorStatus struct {
-	ID             int32
+	ID             int64
 	ValidatorIndex pgtype.Int8
 	Status         string
 	CreatedAt      pgtype.Timestamptz

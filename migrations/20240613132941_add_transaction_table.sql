@@ -10,7 +10,7 @@ CREATE TABLE decryption_keys_message (
 );
 
 CREATE TABLE decryption_key (
-    id                          SERIAL PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
     eon                         BIGINT,
     identity_preimage           BYTEA,
     key                         BYTEA NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE decryption_keys_message_decryption_key (
 );
 
 CREATE TABLE transaction_submitted_event (
-    id                                  SERIAL PRIMARY KEY,
+    id                                  BIGSERIAL PRIMARY KEY,
     event_block_hash                    BYTEA NOT NULL,
     event_block_number                  BIGINT NOT NULL,
     event_tx_index                      BIGINT NOT NULL,

@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS proposer_duties
 (
-    id                          SERIAL PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
     public_key                  TEXT NOT NULL,
     validator_index             BIGINT NOT NULL,
     slot                        BIGINT UNIQUE NOT NULL,
