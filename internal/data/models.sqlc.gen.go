@@ -176,6 +176,7 @@ type TransactionSubmittedEvent struct {
 	EncryptedTransaction []byte
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
+	EventTxHash          []byte
 }
 
 type ValidatorRegistrationMessage struct {
