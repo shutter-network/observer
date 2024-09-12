@@ -101,6 +101,13 @@ func (pmw *P2PMsgsWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
 		}
 	}
 	for _, block := range tooOld {
+		exists, err := pmw.txMapper.BlockExists(context.Background(), int64(block))
+		if err != nil {
+			log.Err(err).Uint64("block", block).Msg("could not query if block exists")
+		}
+		if !exists {
+			log.Err(fmt.Errorf("want to delete block that does not exist in db")).Uint64("block", block)
+		}
 		delete(pmw.recentBlocks, block)
 	}
 }
