@@ -82,7 +82,6 @@ func (pmw *P2PMsgsWatcher) insertBlock(ctx context.Context, ev *BlockReceivedEve
 		BlockHash:      ev.Header.Hash().Bytes(),
 		BlockNumber:    ev.Header.Number.Int64(),
 		BlockTimestamp: int64(ev.Header.Time),
-		TxHash:         ev.Header.TxHash[:],
 		Slot:           int64(utils.GetSlotForBlock(ev.Header.Time, GenesisTimestamp, SlotDuration)),
 	})
 	if err != nil {

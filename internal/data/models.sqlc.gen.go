@@ -100,7 +100,6 @@ type Block struct {
 	BlockHash      []byte
 	BlockNumber    int64
 	BlockTimestamp int64
-	TxHash         []byte
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	Slot           int64
