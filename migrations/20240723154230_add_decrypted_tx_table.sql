@@ -1,11 +1,20 @@
 -- +goose Up
 -- +goose StatementBegin
 
-CREATE TYPE IF NOT EXISTS tx_status_val AS ENUM 
-(
-    'included', 
-    'not included'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_type 
+        WHERE typname = 'tx_status_val'
+    ) THEN
+        CREATE TYPE tx_status_val AS ENUM 
+        (
+            'included', 
+            'not included'
+        );
+    END IF;
+END $$;
 
 
 CREATE TABLE IF NOT EXISTS decrypted_tx

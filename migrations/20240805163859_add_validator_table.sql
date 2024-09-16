@@ -1,11 +1,21 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE TYPE IF NOT EXISTS validator_registration_validity AS ENUM 
-(
-    'valid', 
-    'invalid message',
-    'invalid signature'
-);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_type 
+        WHERE typname = 'validator_registration_validity'
+    ) THEN
+    CREATE TYPE validator_registration_validity AS ENUM 
+        (
+            'valid', 
+            'invalid message',
+            'invalid signature'
+        );
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS validator_registration_message
 (
