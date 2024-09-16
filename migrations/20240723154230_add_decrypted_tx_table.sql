@@ -34,5 +34,5 @@ ALTER COLUMN slot SET NOT NULL;
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE decrypted_tx;
-DROP TYPE tx_status_val;
+DROP TYPE tx_status_val CASCADE;
 -- +goose StatementEnd
