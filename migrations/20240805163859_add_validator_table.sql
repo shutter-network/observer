@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE TYPE validator_registration_validity AS ENUM 
+CREATE TYPE IF NOT EXISTS validator_registration_validity AS ENUM 
 (
     'valid', 
     'invalid message',

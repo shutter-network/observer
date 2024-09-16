@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 
-CREATE TYPE tx_status_val AS ENUM 
+CREATE TYPE IF NOT EXISTS tx_status_val AS ENUM 
 (
     'included', 
     'not included'
