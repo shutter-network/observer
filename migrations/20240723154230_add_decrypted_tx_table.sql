@@ -33,6 +33,6 @@ ALTER COLUMN slot SET NOT NULL;
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TYPE tx_status_val;
 DROP TABLE decrypted_tx;
+DROP TYPE tx_status_val;
 -- +goose StatementEnd

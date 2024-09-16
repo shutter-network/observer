@@ -34,6 +34,6 @@ CREATE TABLE validator_registry_events_synced_until(
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TYPE validator_registration_validity;
 DROP TABLE validator_registration_message;
+DROP TYPE validator_registration_validity;
 -- +goose StatementEnd
