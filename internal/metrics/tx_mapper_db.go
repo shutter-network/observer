@@ -203,7 +203,6 @@ func (tm *TxMapperDB) AddBlock(
 		BlockHash:      b.BlockHash,
 		BlockNumber:    b.BlockNumber,
 		BlockTimestamp: b.BlockTimestamp,
-		TxHash:         b.TxHash,
 		Slot:           b.Slot,
 	})
 	if err != nil {

@@ -16,10 +16,9 @@ INSERT into block(
 	block_hash,
 	block_number,
 	block_timestamp,
-	tx_hash,
 	slot
 ) 
-VALUES ($1, $2, $3, $4, $5) 
+VALUES ($1, $2, $3, $4) 
 ON CONFLICT DO NOTHING
 `
 
@@ -27,7 +26,6 @@ type CreateBlockParams struct {
 	BlockHash      []byte
 	BlockNumber    int64
 	BlockTimestamp int64
-	TxHash         []byte
 	Slot           int64
 }
 
@@ -36,7 +34,6 @@ func (q *Queries) CreateBlock(ctx context.Context, arg CreateBlockParams) error 
 		arg.BlockHash,
 		arg.BlockNumber,
 		arg.BlockTimestamp,
-		arg.TxHash,
 		arg.Slot,
 	)
 	return err
@@ -352,7 +349,7 @@ func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidator
 }
 
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
-SELECT block_hash, block_number, block_timestamp, tx_hash, created_at, updated_at, slot FROM block
+SELECT block_hash, block_number, block_timestamp, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
 `
 
@@ -363,7 +360,6 @@ func (q *Queries) QueryBlockFromSlot(ctx context.Context, slot int64) (Block, er
 		&i.BlockHash,
 		&i.BlockNumber,
 		&i.BlockTimestamp,
-		&i.TxHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Slot,
