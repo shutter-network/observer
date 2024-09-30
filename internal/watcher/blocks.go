@@ -34,13 +34,16 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 	newHeads := make(chan *types.Header)
 	sub, err := bw.ethClient.SubscribeNewHead(ctx, newHeads)
 	if err != nil {
+		log.Info().Err(err).Msg("error on subscribe, no new head")
 		return err
 	}
 	runner.Defer(sub.Unsubscribe)
 	runner.Go(func() error {
 		for {
+			log.Info().Msg("looking for new head")
 			select {
 			case <-ctx.Done():
+				log.Info().Msg("context cancelled, no new head")
 				return ctx.Err()
 			case head := <-newHeads:
 				log.Info().
@@ -53,6 +56,7 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 				}
 				bw.blocksChannel <- ev
 			case err := <-sub.Err():
+				log.Info().Err(err).Msg("got an err, no new head")
 				return err
 			}
 		}

@@ -54,24 +54,41 @@ func (pmw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 
 func (pmw *P2PMsgsWatcher) insertBlocks(ctx context.Context) error {
 	for {
+		log.Info().Msg("polling insertBlocks, for new head channel")
 		select {
 		case <-ctx.Done():
+			log.Info().Msg("context cancelled for insertBlocks, no new head")
 			return ctx.Err()
 		case ev, ok := <-pmw.blocksChannel:
 			if !ok {
+				log.Info().Msg("returning NIL from insertBlocks, no new head")
 				return nil
 			}
+			log.Info().
+				Hex("block-hash", ev.Header.Hash().Bytes()).
+				Int64("block-number", ev.Header.Number.Int64()).
+				Msg("planning to insertBlock, with new head")
 			err := pmw.insertBlock(ctx, ev)
 			if err != nil {
+				log.Info().Err(err).Msg("error in insertBlock, no new head")
 				return err
 			}
+			log.Info().Msg("calling ClearOldBlocks, before new head")
 			pmw.clearOldBlocks(ev)
 		}
 	}
 }
 
 func (pmw *P2PMsgsWatcher) insertBlock(ctx context.Context, ev *BlockReceivedEvent) error {
+	log.Info().
+		Hex("block-hash", ev.Header.Hash().Bytes()).
+		Int64("block-number", ev.Header.Number.Int64()).
+		Msg("trying to obtain lock for insertBlock new head")
 	pmw.recentBlocksMux.Lock()
+	log.Info().
+		Hex("block-hash", ev.Header.Hash().Bytes()).
+		Int64("block-number", ev.Header.Number.Int64()).
+		Msg("obtained lock for insertBlock new head")
 	defer pmw.recentBlocksMux.Unlock()
 	pmw.recentBlocks[ev.Header.Number.Uint64()] = ev
 	if ev.Header.Number.Uint64() > pmw.mostRecentBlock {
@@ -91,7 +108,15 @@ func (pmw *P2PMsgsWatcher) insertBlock(ctx context.Context, ev *BlockReceivedEve
 }
 
 func (pmw *P2PMsgsWatcher) clearOldBlocks(latestEv *BlockReceivedEvent) {
+	log.Info().
+		Hex("block-hash", latestEv.Header.Hash().Bytes()).
+		Int64("block-number", latestEv.Header.Number.Int64()).
+		Msg("trying to obtain lock for clearOldBlocks new head")
 	pmw.recentBlocksMux.Lock()
+	log.Info().
+		Hex("block-hash", latestEv.Header.Hash().Bytes()).
+		Int64("block-number", latestEv.Header.Number.Int64()).
+		Msg("obtained lock for clearOldBlocks new head")
 	defer pmw.recentBlocksMux.Unlock()
 
 	tooOld := []uint64{}
