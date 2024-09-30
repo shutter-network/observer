@@ -140,7 +140,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 					return err
 				}
 				log.Info().
-					Bytes("encrypted transaction", txEvent.EncryptedTransaction).
+					Hex("encrypted transaction (hex)", txEvent.EncryptedTransaction).
 					Msg("new encrypted transaction")
 			case dd := <-decryptionDataChannel:
 				keys, identites := getDecryptionKeysAndIdentities(dd.Keys)
@@ -178,7 +178,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						return err
 					}
 					log.Info().
-						Bytes("key shares", share.Share).
+						Hex("key shares (hex)", share.Share).
 						Int64("slot", ks.Slot).
 						Msg("new key shares")
 				}
