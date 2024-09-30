@@ -189,23 +189,6 @@ func (tm *TxMapperDB) AddKeyShare(ctx context.Context, dks *data.DecryptionKeySh
 	return nil
 }
 
-func (tm *TxMapperDB) BlockExists(ctx context.Context, blockNumber int64) (bool, error) {
-	tx, err := tm.db.Begin(ctx)
-	if err != nil {
-		return false, err
-	}
-	qtx := tm.dbQuery.WithTx(tx)
-	count, err := qtx.QueryBlock(ctx, blockNumber)
-	if err != nil {
-		return false, err
-	}
-	if count == 1 {
-		return true, nil
-	}
-	return false, nil
-
-}
-
 func (tm *TxMapperDB) AddBlock(
 	ctx context.Context,
 	b *data.Block,

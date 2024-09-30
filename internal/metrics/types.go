@@ -59,7 +59,6 @@ type TxMapper interface {
 		ctx context.Context,
 		b *data.Block,
 	) error
-	BlockExists(ctx context.Context, blockNumber int64) (bool, error)
 	QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error)
 	AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error
 	UpdateValidatorStatus(ctx context.Context) error

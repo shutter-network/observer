@@ -348,18 +348,6 @@ func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidator
 	return err
 }
 
-const queryBlock = `-- name: QueryBlock :one
-SELECT COUNT(*) FROM block
-WHERE block_number = $1
-`
-
-func (q *Queries) QueryBlock(ctx context.Context, blockNumber int64) (int64, error) {
-	row := q.db.QueryRow(ctx, queryBlock, blockNumber)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
