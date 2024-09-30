@@ -3,9 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+
+	_ "net/http/pprof"
 
 	"github.com/rs/zerolog/log"
 
@@ -112,6 +116,11 @@ func Cmd() *cobra.Command {
 }
 
 func Start() error {
+	log.Info().Msg("go run pprof")
+	go func() {
+		log.Info().Any("pprof", http.ListenAndServe("0.0.0.0:7070", nil)).Msg("started pprof")
+	}()
+	runtime.SetBlockProfileRate(1)
 	log.Info().Msg("Starting Observer")
 	// start services here
 	ctx := context.Background()

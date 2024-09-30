@@ -81,6 +81,10 @@ ON CONFLICT DO NOTHING;
 SELECT * FROM block
 WHERE slot = $1 FOR UPDATE;
 
+-- name: QueryBlock :one
+SELECT COUNT(*) FROM block
+WHERE block_number = $1;
+
 -- name: CreateDecryptedTX :exec
 INSERT into decrypted_tx(
 	slot,
