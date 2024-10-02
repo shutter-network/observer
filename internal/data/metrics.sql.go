@@ -568,3 +568,20 @@ func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidator
 	}
 	return items, nil
 }
+
+const updateDecryptedTX = `-- name: UpdateDecryptedTX :exec
+UPDATE decrypted_tx
+SET tx_status = $1
+WHERE slot = $2 AND tx_index = $3
+`
+
+type UpdateDecryptedTXParams struct {
+	TxStatus TxStatusVal
+	Slot     int64
+	TxIndex  int64
+}
+
+func (q *Queries) UpdateDecryptedTX(ctx context.Context, arg UpdateDecryptedTXParams) error {
+	_, err := q.db.Exec(ctx, updateDecryptedTX, arg.TxStatus, arg.Slot, arg.TxIndex)
+	return err
+}
