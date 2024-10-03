@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"math/rand"
 	"path"
 	"runtime"
 	"testing"
@@ -40,6 +41,6 @@ func (s *TestMetricsSuite) SetupSuite() {
 	migrationsPath := curDir + "/../migrations"
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
-	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &common.Config{}, &ethclient.Client{}, &beaconapiclient.Client{}, 1)
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &common.Config{}, &ethclient.Client{}, &beaconapiclient.Client{}, 1, rand.Uint64(), rand.Uint64())
 	s.dbQuery = data.New(s.testDB.DbInstance)
 }
