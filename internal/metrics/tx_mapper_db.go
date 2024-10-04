@@ -396,7 +396,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 			log.Err(err).Msg("error while trying to retrieve decryption key ID")
 			continue
 		}
-		decryptedTx, err := getDecryptedTXHash(txSubEvent, identityPreimageToDecKeyAndMsg)
+		decryptedTx, err := getDecryptedTX(txSubEvent, identityPreimageToDecKeyAndMsg)
 		if err != nil {
 			log.Err(err).Msg("error while trying to get decrypted tx hash")
 			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
@@ -633,7 +633,7 @@ func computeIdentity(prefix []byte, sender common.Address) []byte {
 	return imageBytes
 }
 
-func getDecryptedTXHash(
+func getDecryptedTX(
 	txSubEvent data.TransactionSubmittedEvent,
 	identityPreimageToDecKeyAndMsg map[string]*DecKeyAndMessage,
 ) (*types.Transaction, error) {
