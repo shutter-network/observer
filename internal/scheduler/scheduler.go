@@ -97,6 +97,8 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 		ethClient,
 		beaconAPIClient,
 		chainID.Int64(),
+		GenesisTimestamp,
+		SlotDuration,
 	)
 
 	validatorStatusScheduler := NewValidatorStatusScheduler(txMapper)

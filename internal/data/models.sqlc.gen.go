@@ -14,8 +14,13 @@ import (
 type TxStatusVal string
 
 const (
-	TxStatusValIncluded    TxStatusVal = "included"
-	TxStatusValNotincluded TxStatusVal = "not included"
+	TxStatusValIncluded            TxStatusVal = "included"
+	TxStatusValNotincluded         TxStatusVal = "not included"
+	TxStatusValNotdecrypted        TxStatusVal = "not decrypted"
+	TxStatusValInvalid             TxStatusVal = "invalid"
+	TxStatusValPending             TxStatusVal = "pending"
+	TxStatusValShieldedinclusion   TxStatusVal = "shielded inclusion"
+	TxStatusValUnshieldedinclusion TxStatusVal = "unshielded inclusion"
 )
 
 func (e *TxStatusVal) Scan(src interface{}) error {

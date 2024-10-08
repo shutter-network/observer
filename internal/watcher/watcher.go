@@ -98,6 +98,8 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		ethClient,
 		beaconAPIClient,
 		chainID.Int64(),
+		GenesisTimestamp,
+		SlotDuration,
 	)
 
 	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)

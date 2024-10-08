@@ -44,7 +44,7 @@ type DecKeyAndMessage struct {
 }
 
 type TxExecution struct {
-	BlockNumber        int64
+	// BlockNumber        int64
 	DecKeysAndMessages []*DecKeyAndMessage
 }
 

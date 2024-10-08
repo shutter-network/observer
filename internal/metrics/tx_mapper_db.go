@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"math/big"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -20,6 +20,7 @@ import (
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
 	dbTypes "github.com/shutter-network/gnosh-metrics/common/database"
+	"github.com/shutter-network/gnosh-metrics/common/utils"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	gnosis "github.com/shutter-network/rolling-shutter/rolling-shutter/keyperimpl/gnosis"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
@@ -28,13 +29,17 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 )
 
+const ReceiptWaitTimeout = 1 * time.Hour
+
 type TxMapperDB struct {
-	db              *pgxpool.Pool
-	dbQuery         *data.Queries
-	config          *metricsCommon.Config
-	ethClient       *ethclient.Client
-	beaconAPIClient *beaconapiclient.Client
-	chainID         int64
+	db               *pgxpool.Pool
+	dbQuery          *data.Queries
+	config           *metricsCommon.Config
+	ethClient        *ethclient.Client
+	beaconAPIClient  *beaconapiclient.Client
+	chainID          int64
+	genesisTimestamp uint64
+	slotDuration     uint64
 }
 
 func NewTxMapperDB(
@@ -44,14 +49,18 @@ func NewTxMapperDB(
 	ethClient *ethclient.Client,
 	beaconAPIClient *beaconapiclient.Client,
 	chainID int64,
+	genesisTimestamp uint64,
+	slotDuration uint64,
 ) TxMapper {
 	return &TxMapperDB{
-		db:              db,
-		dbQuery:         data.New(db),
-		config:          config,
-		ethClient:       ethClient,
-		beaconAPIClient: beaconAPIClient,
-		chainID:         chainID,
+		db:               db,
+		dbQuery:          data.New(db),
+		config:           config,
+		ethClient:        ethClient,
+		beaconAPIClient:  beaconAPIClient,
+		chainID:          chainID,
+		genesisTimestamp: genesisTimestamp,
+		slotDuration:     slotDuration,
 	}
 }
 
@@ -120,20 +129,16 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	if err != nil {
 		return err
 	}
-	totalDecKeysAndMessages := len(decKeysAndMessages.Keys)
 
-	block, err := qtx.QueryBlockFromSlot(ctx, decKeysAndMessages.Slot)
+	totalDecKeysAndMessages := len(decKeysAndMessages.Keys)
+	err = tx.Commit(ctx)
 	if err != nil {
-		log.Debug().Int64("slot", decKeysAndMessages.Slot).Msg("block not found in AddDecryptedTxFromDecryptionKeys")
-		err = tx.Commit(ctx)
-		if err != nil {
-			log.Err(err).Msg("unable to commit db transaction")
-			return err
-		}
-		for i := 0; i < totalDecKeysAndMessages; i++ {
-			metricsDecKeyReceived.Inc()
-		}
-		return nil
+		log.Err(err).Msg("unable to commit db transaction")
+		return err
+	}
+
+	for i := 0; i < totalDecKeysAndMessages; i++ {
+		metricsDecKeyReceived.Inc()
 	}
 
 	dkam := make([]*DecKeyAndMessage, totalDecKeysAndMessages)
@@ -155,21 +160,10 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	}
 	err = tm.processTransactionExecution(ctx, &TxExecution{
 		DecKeysAndMessages: dkam,
-		BlockNumber:        block.BlockNumber,
 	})
 	if err != nil {
 		log.Err(err).Int64("slot", decKeysAndMessages.Slot).Msg("failed to process transaction execution")
 		return err
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		log.Err(err).Msg("unable to commit db transaction")
-		return err
-	}
-
-	for i := 0; i < totalDecKeysAndMessages; i++ {
-		metricsDecKeyReceived.Inc()
 	}
 	return nil
 }
@@ -193,57 +187,13 @@ func (tm *TxMapperDB) AddBlock(
 	ctx context.Context,
 	b *data.Block,
 ) error {
-	tx, err := tm.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	qtx := tm.dbQuery.WithTx(tx)
-	err = qtx.CreateBlock(ctx, data.CreateBlockParams{
+	err := tm.dbQuery.CreateBlock(ctx, data.CreateBlockParams{
 		BlockHash:      b.BlockHash,
 		BlockNumber:    b.BlockNumber,
 		BlockTimestamp: b.BlockTimestamp,
 		Slot:           b.Slot,
 	})
-	if err != nil {
-		return err
-	}
-	decKeysAndMessages, err := qtx.QueryDecryptionKeysAndMessage(ctx, b.Slot)
-	if err != nil {
-		return err
-	}
-
-	totalDecKeysAndMessages := len(decKeysAndMessages)
-
-	if totalDecKeysAndMessages == 0 {
-		log.Debug().Int64("slot", b.Slot).Msg("no decryption keys received yet")
-		return tx.Commit(ctx)
-	}
-
-	dkam := make([]*DecKeyAndMessage, totalDecKeysAndMessages)
-	for index, elem := range decKeysAndMessages {
-		dkam[index] = &DecKeyAndMessage{
-			Slot:             elem.Slot.Int64,
-			TxPointer:        elem.TxPointer.Int64,
-			Eon:              elem.Eon.Int64,
-			Key:              elem.Key,
-			IdentityPreimage: elem.IdentityPreimage,
-			KeyIndex:         elem.KeyIndex,
-			DecryptionKeyID:  elem.DecryptionKeyID,
-		}
-	}
-	if len(dkam) > 0 {
-		dkam = dkam[1:]
-	}
-	err = tm.processTransactionExecution(ctx, &TxExecution{
-		DecKeysAndMessages: dkam,
-		BlockNumber:        b.BlockNumber,
-	})
-	if err != nil {
-		log.Err(err).Int64("slot", b.Slot).Msg("failed to process transaction execution")
-		return err
-	}
-	return tx.Commit(ctx)
+	return err
 }
 
 func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
@@ -439,78 +389,120 @@ func (tm *TxMapperDB) processTransactionExecution(
 	}
 
 	slot := te.DecKeysAndMessages[0].Slot
-	detailedBlock, err := tm.ethClient.BlockByNumber(ctx, big.NewInt(te.BlockNumber))
-	if err != nil {
-		return err
-	}
-
-	var blockTxHashes []common.Hash
-	for _, tx := range detailedBlock.Transactions() {
-		blockTxHashes = append(blockTxHashes, tx.Hash())
-	}
-
-	log.Debug().Int64("block number", detailedBlock.Number().Int64()).
-		Int64("slot", slot).
-		Msg("block info while processing decrypted transactions")
 
 	for index, txSubEvent := range txSubEvents {
-		decryptedTxHash, err := getDecryptedTXHash(txSubEvent, identityPreimageToDecKeyAndMsg)
-		if err != nil {
-			log.Err(err).Msg("error while trying to get decrypted tx hash")
-		}
 		decryptionKeyID, err := getDecryptionKeyID(txSubEvent, identityPreimageToDecKeyAndMsg)
 		if err != nil {
 			log.Err(err).Msg("error while trying to retrieve decryption key ID")
+			continue
 		}
-		if index < len(blockTxHashes) {
-			log.Debug().
-				Str("decryptedTXHash", decryptedTxHash.Hex()).
-				Str("blockTxHash", blockTxHashes[index].Hex()).
-				Bool("matches", decryptedTxHash.Cmp(blockTxHashes[index]) == 0).
-				Msg("comparing tx hash")
-			if decryptedTxHash.Cmp(blockTxHashes[index]) == 0 {
-				// it means we have it in correct order and the transaction is correct
-				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-					Slot:                        slot,
-					TxIndex:                     txSubEvent.TxIndex,
-					TxHash:                      decryptedTxHash.Bytes(),
-					TxStatus:                    data.TxStatusValIncluded,
-					DecryptionKeyID:             decryptionKeyID,
-					TransactionSubmittedEventID: txSubEvent.ID,
-				})
-				if err != nil {
-					return err
-				}
-			} else {
-				// something went wrong case
-				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-					Slot:                        slot,
-					TxIndex:                     txSubEvent.TxIndex,
-					TxHash:                      decryptedTxHash.Bytes(),
-					TxStatus:                    data.TxStatusValNotincluded,
-					DecryptionKeyID:             decryptionKeyID,
-					TransactionSubmittedEventID: txSubEvent.ID,
-				})
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			// Mark remaining txSubEvents as missing
-			log.Debug().Str("txHash", decryptedTxHash.Hex()).
-				Msg("decryptedTXHash (missing block transaction)")
+		decryptedTx, err := getDecryptedTX(txSubEvent, identityPreimageToDecKeyAndMsg)
+		if err != nil {
+			log.Err(err).Msg("error while trying to get decrypted tx hash")
 			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 				Slot:                        slot,
 				TxIndex:                     txSubEvent.TxIndex,
-				TxHash:                      decryptedTxHash.Bytes(),
-				TxStatus:                    data.TxStatusValNotincluded,
+				TxHash:                      common.Hash{}.Bytes(),
+				TxStatus:                    data.TxStatusValNotdecrypted,
 				DecryptionKeyID:             decryptionKeyID,
 				TransactionSubmittedEventID: txSubEvent.ID,
 			})
 			if err != nil {
-				return err
+				log.Err(err).Msg("failed to create decrypted tx")
+			}
+			continue
+		}
+		// send tx to public mempool since keys are already public, increases inclusion time
+		err = tm.ethClient.SendTransaction(context.Background(), decryptedTx)
+		if err != nil {
+			log.Err(err).Msg("failed to send transaction")
+			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+				Slot:                        slot,
+				TxIndex:                     txSubEvent.TxIndex,
+				TxHash:                      decryptedTx.Hash().Bytes(),
+				TxStatus:                    data.TxStatusValInvalid,
+				DecryptionKeyID:             decryptionKeyID,
+				TransactionSubmittedEventID: txSubEvent.ID,
+			})
+			if err != nil {
+				log.Err(err).Msg("failed to create decrypted tx")
+			}
+			continue
+		} else {
+			log.Info().Hex("tx-hash", decryptedTx.Hash().Bytes()).Msg("transaction sent")
+			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+				Slot:                        slot,
+				TxIndex:                     txSubEvent.TxIndex,
+				TxHash:                      decryptedTx.Hash().Bytes(),
+				TxStatus:                    data.TxStatusValPending,
+				DecryptionKeyID:             decryptionKeyID,
+				TransactionSubmittedEventID: txSubEvent.ID,
+			})
+			if err != nil {
+				log.Err(err).Msg("failed to create decrypted tx")
+				continue
 			}
 		}
+
+		// Fire off a goroutine to wait for the transaction receipt
+		go func(ctx context.Context, index int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, eventID int64) {
+			// Wait for the receipt with a timeout
+			receipt, err := tm.waitForReceiptWithTimeout(ctx, txHash, ReceiptWaitTimeout)
+			if err != nil {
+				log.Err(err).Msgf("failed to get receipt for transaction %s", txHash.Hex())
+				// update status to not included
+				err := tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
+					TxStatus: data.TxStatusValNotincluded,
+					Slot:     slot,
+					TxIndex:  txIndex,
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to update decrypted tx")
+					return
+				}
+			} else {
+				// receipt found
+				log.Info().Hex("tx-hash", receipt.TxHash.Bytes()).
+					Uint64("receipt-status", receipt.Status).
+					Msg("transaction receipt found")
+
+				block, err := tm.ethClient.BlockByNumber(ctx, receipt.BlockNumber)
+				if err != nil {
+					log.Err(err).Uint64("block-number", receipt.BlockNumber.Uint64()).Msg("failed to retrieve block")
+					return
+				}
+
+				inclusionSlot := utils.GetSlotForBlock(block.Header().Time, tm.genesisTimestamp, tm.slotDuration)
+				txStatus := data.TxStatusValShieldedinclusion
+
+				log.Info().Uint("tx-index", receipt.TransactionIndex).
+					Uint64("inclusion-slot", inclusionSlot).
+					Msg("receipt data")
+
+				log.Info().Int("index", index).
+					Int64("inclusion-slot", slot).
+					Msg("local data")
+
+				if receipt.TransactionIndex != uint(index) {
+					log.Info().Uint("tx-index", receipt.TransactionIndex).Msg("transaction index mismatch")
+					txStatus = data.TxStatusValUnshieldedinclusion
+				}
+				if inclusionSlot != uint64(slot) {
+					log.Info().Int64("slot", slot).Msg("transaction slot mismatch")
+					txStatus = data.TxStatusValUnshieldedinclusion
+				}
+
+				err = tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
+					TxStatus: txStatus,
+					TxIndex:  txIndex,
+					Slot:     slot,
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to update decrypted tx")
+					return
+				}
+			}
+		}(ctx, index, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txSubEvent.ID)
 	}
 	return nil
 }
@@ -641,20 +633,20 @@ func computeIdentity(prefix []byte, sender common.Address) []byte {
 	return imageBytes
 }
 
-func getDecryptedTXHash(
+func getDecryptedTX(
 	txSubEvent data.TransactionSubmittedEvent,
 	identityPreimageToDecKeyAndMsg map[string]*DecKeyAndMessage,
-) (common.Hash, error) {
+) (*types.Transaction, error) {
 	identityPreimage := computeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
 	dkam, ok := identityPreimageToDecKeyAndMsg[hex.EncodeToString(identityPreimage)]
 	if !ok {
-		return common.Hash{}, fmt.Errorf("identity preimage not found %s", hex.EncodeToString(identityPreimage))
+		return nil, fmt.Errorf("identity preimage not found %s", hex.EncodeToString(identityPreimage))
 	}
 	tx, err := decryptTransaction(dkam.Key, txSubEvent.EncryptedTransaction)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
-	return tx.Hash(), nil
+	return tx, nil
 }
 
 func getDecryptionKeyID(
@@ -691,4 +683,41 @@ func decryptTransaction(key []byte, encrypted []byte) (*types.Transaction, error
 		return nil, errors.Wrapf(err, "Failed to unmarshal decrypted message to transaction type")
 	}
 	return tx, nil
+}
+
+// waitForReceiptWithTimeout waits for a transaction receipt with a provided timeout.
+func (tm *TxMapperDB) waitForReceiptWithTimeout(ctx context.Context, txHash common.Hash, receiptWaitTimeout time.Duration) (*types.Receipt, error) {
+	ctx, cancel := context.WithTimeout(ctx, receiptWaitTimeout)
+	defer cancel()
+
+	// wait for the transaction receipt
+	receipt, err := tm.waitForReceipt(ctx, txHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get receipt for transaction %s: %w", txHash.Hex(), err)
+	}
+	return receipt, nil
+}
+
+// waitForReceipt polls the Ethereum network for the transaction receipt until it's available or the context is canceled.
+func (tm *TxMapperDB) waitForReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	for {
+		// check if the context has been canceled or timed out
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		// query for the transaction receipt
+		receipt, err := tm.ethClient.TransactionReceipt(ctx, txHash)
+		if err == ethereum.NotFound {
+			// If the receipt is not found, continue polling
+			time.Sleep(3 * time.Second)
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+
+		return receipt, nil
+	}
 }
