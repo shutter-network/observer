@@ -416,18 +416,34 @@ func (tm *TxMapperDB) processTransactionExecution(
 		err = tm.ethClient.SendTransaction(context.Background(), decryptedTx)
 		if err != nil {
 			log.Err(err).Msg("failed to send transaction")
-			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-				Slot:                        slot,
-				TxIndex:                     txSubEvent.TxIndex,
-				TxHash:                      decryptedTx.Hash().Bytes(),
-				TxStatus:                    data.TxStatusValInvalid,
-				DecryptionKeyID:             decryptionKeyID,
-				TransactionSubmittedEventID: txSubEvent.ID,
-			})
-			if err != nil {
-				log.Err(err).Msg("failed to create decrypted tx")
+			if err.Error() == "AlreadyKnown" {
+				log.Debug().Hex("tx-hash", decryptedTx.Hash().Bytes()).Msg("already known")
+				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+					Slot:                        slot,
+					TxIndex:                     txSubEvent.TxIndex,
+					TxHash:                      decryptedTx.Hash().Bytes(),
+					TxStatus:                    data.TxStatusValPending,
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEvent.ID,
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to create decrypted tx")
+					continue
+				}
+			} else {
+				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+					Slot:                        slot,
+					TxIndex:                     txSubEvent.TxIndex,
+					TxHash:                      decryptedTx.Hash().Bytes(),
+					TxStatus:                    data.TxStatusValInvalid,
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEvent.ID,
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to create decrypted tx")
+				}
+				continue
 			}
-			continue
 		} else {
 			log.Info().Hex("tx-hash", decryptedTx.Hash().Bytes()).Msg("transaction sent")
 			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
