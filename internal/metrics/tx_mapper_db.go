@@ -416,6 +416,9 @@ func (tm *TxMapperDB) processTransactionExecution(
 		log.Info().Uint64("gas", decryptedTx.Gas()).
 			Uint64("gas-price", decryptedTx.GasPrice().Uint64()).
 			Uint64("cost", decryptedTx.Cost().Uint64()).
+			Uint64("max-priority-fee-per-gas", decryptedTx.GasTipCap().Uint64()).
+			Uint64("max-fee-per-gas", decryptedTx.GasFeeCap().Uint64()).
+			Uint8("tx-type", decryptedTx.Type()).
 			Msg("tx-data")
 
 		// send tx to public mempool since keys are already public, increases inclusion time
