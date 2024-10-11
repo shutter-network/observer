@@ -412,6 +412,12 @@ func (tm *TxMapperDB) processTransactionExecution(
 			}
 			continue
 		}
+
+		log.Info().Uint64("gas", decryptedTx.Gas()).
+			Uint64("gas-price", decryptedTx.GasPrice().Uint64()).
+			Uint64("cost", decryptedTx.Cost().Uint64()).
+			Msg("tx-data")
+
 		// send tx to public mempool since keys are already public, increases inclusion time
 		err = tm.ethClient.SendTransaction(context.Background(), decryptedTx)
 		if err != nil {
