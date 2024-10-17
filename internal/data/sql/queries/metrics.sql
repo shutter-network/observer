@@ -161,5 +161,5 @@ ON CONFLICT DO NOTHING;
 
 -- name: UpdateDecryptedTX :exec
 UPDATE decrypted_tx
-SET tx_status = $1
-WHERE slot = $2 AND tx_index = $3;
+SET tx_status = $1, updated_at = $2
+WHERE slot = $3 AND tx_index = $4;

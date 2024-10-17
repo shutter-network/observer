@@ -477,9 +477,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 				log.Err(err).Msgf("failed to get receipt for transaction %s", txHash.Hex())
 				// update status to not included
 				err := tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
-					TxStatus: data.TxStatusValNotincluded,
-					Slot:     slot,
-					TxIndex:  txIndex,
+					TxStatus:  data.TxStatusValNotincluded,
+					UpdatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+					Slot:      slot,
+					TxIndex:   txIndex,
 				})
 				if err != nil {
 					log.Err(err).Msg("failed to update decrypted tx")
@@ -518,9 +519,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 				}
 
 				err = tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
-					TxStatus: txStatus,
-					TxIndex:  txIndex,
-					Slot:     slot,
+					TxStatus:  txStatus,
+					UpdatedAt: pgtype.Timestamptz{Time: utils.GetBlockTimestampToTime(block.Header().Time), Valid: true},
+					TxIndex:   txIndex,
+					Slot:      slot,
 				})
 				if err != nil {
 					log.Err(err).Msg("failed to update decrypted tx")
