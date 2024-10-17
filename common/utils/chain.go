@@ -1,5 +1,9 @@
 package utils
 
+import (
+	"time"
+)
+
 func GetSlotTimestamp(slot, genesisTimestamp, slotDuration uint64) uint64 {
 	return genesisTimestamp + (slot)*slotDuration
 }
@@ -22,4 +26,9 @@ func GetFirstSlotOfEpoch(epochNumber, slotsPerEpoch uint64) uint64 {
 
 func GetLastSlotOfEpoch(epochNumber, slotsPerEpoch uint64) uint64 {
 	return (epochNumber+1)*slotsPerEpoch - 1
+}
+
+func GetBlockTimestampToTime(blockTimestamp uint64) time.Time {
+	blockTime := time.Unix(int64(blockTimestamp), 0)
+	return blockTime
 }
