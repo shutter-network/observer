@@ -518,9 +518,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 				}
 
 				err = tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
-					TxStatus: txStatus,
-					TxIndex:  txIndex,
-					Slot:     slot,
+					TxStatus:    txStatus,
+					BlockNumber: pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
+					TxIndex:     txIndex,
+					Slot:        slot,
 				})
 				if err != nil {
 					log.Err(err).Msg("failed to update decrypted tx")
