@@ -120,6 +120,7 @@ type DecryptedTx struct {
 	TransactionSubmittedEventID int64
 	CreatedAt                   pgtype.Timestamptz
 	UpdatedAt                   pgtype.Timestamptz
+	BlockNumber                 pgtype.Int8
 }
 
 type DecryptionKey struct {
