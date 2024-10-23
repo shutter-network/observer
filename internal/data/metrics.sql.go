@@ -571,7 +571,7 @@ func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidator
 
 const updateDecryptedTX = `-- name: UpdateDecryptedTX :exec
 UPDATE decrypted_tx
-SET tx_status = $1, block_number = $2
+SET tx_status = $1, block_number = $2, updated_at = NOW()
 WHERE slot = $3 AND tx_index = $4
 `
 
