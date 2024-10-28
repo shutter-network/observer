@@ -16,6 +16,7 @@ import (
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/gnosh-metrics/common/utils"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
 	"github.com/shutter-network/gnosh-metrics/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
@@ -34,12 +35,15 @@ const (
 	GnosisMainnetGenesisTimestamp                = 1638993340
 	GnosisMainnetSlotDuration                    = 5
 	GnosisValidatorRegistryDeploymentBlockNumber = 34627171
+
+	SlotsPerEpoch uint64 = 16
 )
 
 var (
 	GenesisTimestamp                       uint64
 	SlotDuration                           uint64
 	ValidatorRegistryDeploymentBlockNumber uint64
+	CurrentEpoch                           uint64
 )
 
 type Watcher struct {
@@ -124,6 +128,23 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	runner.Go(func() error {
 		for {
 			select {
+			case ev, ok := <-blocksChannel:
+				if !ok {
+					return nil
+				}
+				epoch := utils.GetEpochForBlock(ev.Header.Time, GenesisTimestamp, SlotDuration, SlotsPerEpoch)
+				if epoch > CurrentEpoch {
+					CurrentEpoch = epoch
+					nextEpoch := epoch + 1
+					err := txMapper.AddProposerDuties(ctx, nextEpoch)
+					if err != nil {
+						return err
+					}
+					log.Info().
+						Uint64("current epoch", epoch).
+						Uint64("next epoch", nextEpoch).
+						Msg("new proposer duties added")
+				}
 			case txEvent := <-txSubmittedEventChannel:
 				err := txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
 					EventBlockHash:       txEvent.Raw.BlockHash[:],

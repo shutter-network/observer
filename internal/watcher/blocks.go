@@ -52,6 +52,7 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 					Time:   time.Now(),
 				}
 				bw.blocksChannel <- ev
+				bw.blocksChannel <- ev
 			case err := <-sub.Err():
 				return err
 			}
