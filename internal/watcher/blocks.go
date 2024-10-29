@@ -12,9 +12,10 @@ import (
 )
 
 type BlocksWatcher struct {
-	config        *common.Config
-	blocksChannel chan *BlockReceivedEvent
-	ethClient     *ethclient.Client
+	config                         *common.Config
+	blocksChannel                  chan *BlockReceivedEvent
+	blocksChannelForProposerDuties chan *BlockReceivedEvent
+	ethClient                      *ethclient.Client
 }
 
 type BlockReceivedEvent struct {
@@ -22,11 +23,12 @@ type BlockReceivedEvent struct {
 	Time   time.Time
 }
 
-func NewBlocksWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, ethClient *ethclient.Client) *BlocksWatcher {
+func NewBlocksWatcher(config *common.Config, blocksChannel chan *BlockReceivedEvent, blocksChannelForProposerDuties chan *BlockReceivedEvent, ethClient *ethclient.Client) *BlocksWatcher {
 	return &BlocksWatcher{
-		config:        config,
-		blocksChannel: blocksChannel,
-		ethClient:     ethClient,
+		config:                         config,
+		blocksChannel:                  blocksChannel,
+		blocksChannelForProposerDuties: blocksChannelForProposerDuties,
+		ethClient:                      ethClient,
 	}
 }
 
@@ -52,7 +54,7 @@ func (bw *BlocksWatcher) Start(ctx context.Context, runner service.Runner) error
 					Time:   time.Now(),
 				}
 				bw.blocksChannel <- ev
-				bw.blocksChannel <- ev
+				bw.blocksChannelForProposerDuties <- ev
 			case err := <-sub.Err():
 				return err
 			}

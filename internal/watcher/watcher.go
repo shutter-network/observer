@@ -68,6 +68,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 	keyShareChannel := make(chan *KeyShareEvent)
+	blocksChannelForProposerDuties := make(chan *BlockReceivedEvent)
 
 	dialer := rpc.WithWebsocketDialer(websocket.Dialer{
 		HandshakeTimeout: 45 * time.Second,
@@ -106,7 +107,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		SlotDuration,
 	)
 
-	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, ethClient)
+	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, blocksChannelForProposerDuties, ethClient)
 	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
 
 	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
@@ -128,7 +129,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	runner.Go(func() error {
 		for {
 			select {
-			case ev, ok := <-blocksChannel:
+			case ev, ok := <-blocksChannelForProposerDuties:
 				if !ok {
 					return nil
 				}
