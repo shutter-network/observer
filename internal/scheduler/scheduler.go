@@ -105,10 +105,6 @@ func (s *Scheduler) Start(ctx context.Context, runner service.Runner) error {
 	validatorStatusJob := validatorStatusScheduler.initValidatorStatusJob(ctx)
 	s.AddJob(validatorStatusJob)
 
-	proposerDutiesScheduler := NewProposerDutiesScheduler(txMapper)
-	proposerDutiesJob := proposerDutiesScheduler.initProposerDutiesJob(ctx)
-	s.AddJob(proposerDutiesJob)
-
 	sch, err := gocron.NewScheduler()
 	if err != nil {
 		return err

@@ -23,3 +23,8 @@ func GetFirstSlotOfEpoch(epochNumber, slotsPerEpoch uint64) uint64 {
 func GetLastSlotOfEpoch(epochNumber, slotsPerEpoch uint64) uint64 {
 	return (epochNumber+1)*slotsPerEpoch - 1
 }
+
+func GetEpochForBlock(blockTimestamp, genesisTimestamp, slotDuration, slotsPerEpoch uint64) uint64 {
+	slot := GetSlotForBlock(blockTimestamp, genesisTimestamp, slotDuration)
+	return GetEpochNumber(slot, slotsPerEpoch)
+}
