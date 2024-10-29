@@ -2,6 +2,6 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'gnosh-observer'
+  - job_name: 'chiado-observer'
     static_configs:
       - targets: ['observer:4000']
