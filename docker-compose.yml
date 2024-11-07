@@ -7,7 +7,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    options:
+    logging:
+      driver: loki
+      options:
         loki-url: ${LOKI_URL}
         loki-external-labels: |
           job=observer-metrics
