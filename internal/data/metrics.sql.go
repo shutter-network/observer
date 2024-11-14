@@ -348,6 +348,28 @@ func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidator
 	return err
 }
 
+const createValidatorStatuses = `-- name: CreateValidatorStatuses :exec
+WITH data (validator_index, status) AS (
+    SELECT 
+	unnest($1::BIGINT[]), 
+	unnest($2::TEXT[])
+)
+INSERT INTO validator_status (validator_index, status)
+SELECT validator_index, status FROM data
+ON CONFLICT (validator_index) DO UPDATE
+SET status = EXCLUDED.status, updated_at = NOW()
+`
+
+type CreateValidatorStatusesParams struct {
+	Column1 []int64
+	Column2 []string
+}
+
+func (q *Queries) CreateValidatorStatuses(ctx context.Context, arg CreateValidatorStatusesParams) error {
+	_, err := q.db.Exec(ctx, createValidatorStatuses, arg.Column1, arg.Column2)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE

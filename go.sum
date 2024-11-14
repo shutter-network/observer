@@ -872,8 +872,8 @@ github.com/shurcooL/users v0.0.0-20180125191416-49c67e49c537/go.mod h1:QJTqeLYED
 github.com/shurcooL/webdavfs v0.0.0-20170829043945-18c3829fa133/go.mod h1:hKmq5kWdCj2z2KEozexVbfEZIWiTjhE0+UjmZgPqehw=
 github.com/shutter-network/gnosh-contracts v0.4.0 h1:2GJcHK9w4lJZMsccklmxDhNnrkRLJDRwsL1acBnAeak=
 github.com/shutter-network/gnosh-contracts v0.4.0/go.mod h1:QB0d64ybbVFKMrLjrc1tldri87KNjTmKQjhk9jaso2E=
-github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20240806080606-131e353220cd h1:k0M4NSOpWP1GeTRoTKzAZzBDENfaoNjb2ZyKNONUXjM=
-github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20240806080606-131e353220cd/go.mod h1:oT1ZJ7IKPHQYCDjlOk/pbqZuOCGiQznmBHx8U2qI3T4=
+github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20241107145313-a3a0ae8e79e6 h1:wi1BDjwFi61xgD6q36/Obm7El5YoCTYfFcyRHQ27TgU=
+github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20241107145313-a3a0ae8e79e6/go.mod h1:0ghSBsSWZ2CkUSgBEfNkV9h2J8Z1rIYZt1TD1+NznQA=
 github.com/shutter-network/shop-contracts v0.0.0-20240407151512-08ef5d8355b6 h1:m6Ti1/IH+GBTtGqyAX3xbh+ruUKvC+m+/uzYDUa+JDQ=
 github.com/shutter-network/shop-contracts v0.0.0-20240407151512-08ef5d8355b6/go.mod h1:LEWXLRruvxq9fe2oKtJI3xfzbauhfWTjOczHN61RU+4=
 github.com/shutter-network/shutter/shlib v0.1.19 h1:Fm/PnxAapl5UK4JuJyF2wBh3dYB5ESztnNFcbmzNNOI=

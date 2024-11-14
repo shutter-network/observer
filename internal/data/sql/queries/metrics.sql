@@ -163,3 +163,14 @@ ON CONFLICT DO NOTHING;
 UPDATE decrypted_tx
 SET tx_status = $1, block_number = $2, updated_at = NOW()
 WHERE slot = $3 AND tx_index = $4;
+
+-- name: CreateValidatorStatuses :exec
+WITH data (validator_index, status) AS (
+    SELECT 
+	unnest($1::BIGINT[]), 
+	unnest($2::TEXT[])
+)
+INSERT INTO validator_status (validator_index, status)
+SELECT validator_index, status FROM data
+ON CONFLICT (validator_index) DO UPDATE
+SET status = EXCLUDED.status, updated_at = NOW();

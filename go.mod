@@ -29,6 +29,7 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
@@ -55,6 +56,7 @@ require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/getkin/kin-openapi v0.87.0 // indirect
+	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-chi/chi/v5 v5.0.10 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
@@ -247,6 +249,6 @@ require (
 	github.com/pressly/goose/v3 v3.20.0
 	github.com/rs/zerolog v1.33.0
 	github.com/shutter-network/gnosh-contracts v0.4.0
-	github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20240806080606-131e353220cd
+	github.com/shutter-network/rolling-shutter/rolling-shutter v0.0.7-0.20241107145313-a3a0ae8e79e6
 	github.com/spf13/pflag v1.0.5 // indirect
 )
