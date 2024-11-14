@@ -571,6 +571,10 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 
 		if regMessage.Nonce > math.MaxInt32 || int64(regMessage.Nonce) < nonceBefore.Int64 {
 			// skip the validator
+			log.Warn().
+				Uint32("nonce", regMessage.Nonce).
+				Int64("before-nonce", nonceBefore.Int64).
+				Msg("ignoring validator with invalid nonce")
 			continue
 		}
 		validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", uint64(validatorIndex))
@@ -579,6 +583,7 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 		}
 		if validator == nil {
 			// unknown validator
+			log.Warn().Msg("ignoring registration message for unknown validator")
 			continue
 		}
 		publicKey, err := validator.Data.Validator.GetPubkey()
