@@ -225,7 +225,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		params.ValidatorIndex = dbTypes.Uint64ToPgTypeInt8(regMessage.ValidatorIndex)
 		params.Nonce = dbTypes.Uint64ToPgTypeInt8(uint64(regMessage.Nonce))
 		params.IsRegisteration = dbTypes.BoolToPgTypeBool(regMessage.IsRegistration)
-		params.Validity, validators, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, vr.Signature, uint64(tm.chainID), tm.config.ValidatorRegistryContractAddress)
+		params.Validity, validators, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, uint64(tm.chainID), tm.config.ValidatorRegistryContractAddress)
 		if err != nil {
 			log.Err(err).Msg("error validating validator registry events")
 		}
@@ -542,7 +542,6 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 	ctx context.Context,
 	vr *validatorRegistryBindings.ValidatorregistryUpdated,
 	regMessage *validatorregistry.AggregateRegistrationMessage,
-	blsSignature []byte,
 	chainID uint64,
 	validatorRegistryContractAddress string,
 ) (data.ValidatorRegistrationValidity, []*beaconapiclient.GetValidatorByIndexResponse, error) {
@@ -569,7 +568,7 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 			}
 		}
 
-		if regMessage.Nonce > math.MaxInt32 || int64(regMessage.Nonce) < nonceBefore.Int64 {
+		if regMessage.Nonce > math.MaxInt32 || int64(regMessage.Nonce) <= nonceBefore.Int64 {
 			// skip the validator
 			log.Warn().
 				Uint32("nonce", regMessage.Nonce).
@@ -579,7 +578,7 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 		}
 		validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", uint64(validatorIndex))
 		if err != nil {
-			return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "failed to get validator %d", regMessage.ValidatorIndex)
+			return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "failed to get validator %d", validatorIndex)
 		}
 		if validator == nil {
 			// unknown validator
@@ -588,15 +587,14 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 		}
 		publicKey, err := validator.Data.Validator.GetPubkey()
 		if err != nil {
-			return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "failed to get pubkey of validator %d", validatorIndex)
+			return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "failed to get public key of validator %d", validatorIndex)
 		}
 		publicKeys = append(publicKeys, publicKey)
 		validators = append(validators, validator)
 	}
 	if validity == data.ValidatorRegistrationValidityValid {
-		// which means message have been validated and all were passed
-		// now we need to check for signature verification
-
+		// which means message have been validated and all sanitizations were passed
+		// now we need to check for signature verification depending on the message version
 		sig := new(blst.P2Affine).Uncompress(vr.Signature)
 		if sig == nil {
 			return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "ignoring registration message with undecodable signature")
