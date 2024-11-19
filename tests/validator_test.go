@@ -30,8 +30,9 @@ func (s *TestMetricsSuite) TestAggregateValidatorRegistrationMessage() {
 	blockNumber := rand.Int63()
 	txIndex := rand.Uint64()
 	index := rand.Uint64()
+
 	msg := &validatorregistry.AggregateRegistrationMessage{
-		Version:                  1,
+		Version:                  0,
 		ChainID:                  2,
 		ValidatorRegistryAddress: common.HexToAddress(ValidatorRegistryContract),
 		ValidatorIndex:           uint64(validatorIndex),
@@ -78,6 +79,57 @@ func (s *TestMetricsSuite) TestAggregateValidatorRegistrationMessage() {
 	})
 	s.Require().NoError(err)
 	s.Require().Equal(currentNonce.Int64, int64(0))
+}
+
+func (s *TestMetricsSuite) TestLegacyValidatorRegistrationMessage() {
+	ctx := context.Background()
+
+	validatorIndex := rand.Int63()
+	blockNumber := rand.Int63()
+	txIndex := rand.Uint64()
+	index := rand.Uint64()
+
+	msg := &validatorregistry.LegacyRegistrationMessage{
+		Version:                  1,
+		ChainID:                  2,
+		ValidatorRegistryAddress: common.HexToAddress(ValidatorRegistryContract),
+		ValidatorIndex:           uint64(validatorIndex),
+		Nonce:                    1,
+		IsRegistration:           true,
+	}
+
+	var ikm [32]byte
+	privkey := blst.KeyGen(ikm[:])
+	pubkey := new(blst.P1Affine).From(privkey)
+
+	sig := validatorregistry.CreateSignature(privkey, msg)
+	url := mockBeaconClient(s.T(), hex.EncodeToString(pubkey.Compress()))
+
+	cl, err := beaconapiclient.New(url)
+	s.Require().NoError(err)
+
+	event := validatorRegistryBindings.ValidatorregistryUpdated{
+		Signature: sig.Compress(),
+		Message:   msg.Marshal(),
+		Raw: types.Log{
+			Address:     common.HexToAddress(ValidatorRegistryContract),
+			BlockNumber: uint64(blockNumber),
+			TxIndex:     uint(txIndex),
+			Index:       uint(index),
+		},
+	}
+	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &observerCommon.Config{ValidatorRegistryContractAddress: ValidatorRegistryContract}, &ethclient.Client{}, cl, 2, rand.Uint64(), rand.Uint64())
+	err = s.txMapperDB.AddValidatorRegistryEvent(ctx, &event)
+	s.Require().NoError(err)
+
+	currentNonce, err := s.dbQuery.QueryValidatorRegistrationMessageNonceBefore(ctx, data.QueryValidatorRegistrationMessageNonceBeforeParams{
+		ValidatorIndex:   dbTypes.Int64ToPgTypeInt8(validatorIndex),
+		EventBlockNumber: int64(blockNumber),
+		EventTxIndex:     int64(txIndex),
+		EventLogIndex:    int64(index),
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(currentNonce.Int64, int64(1))
 }
 
 func mockBeaconClient(t *testing.T, pubKeyHex string) string {
