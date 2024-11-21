@@ -7,6 +7,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
+        loki-external-labels: |
+          job=observer-metrics
     environment:
       - DB_HOST=db
       - DB_PORT=5432
