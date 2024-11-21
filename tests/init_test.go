@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-const ValidatorRegistryContract = "0xValidatorRegistry"
+const ValidatorRegistryContract = "0xefCC23E71f6bA9B22C4D28F7588141d44496A6D6"
 
 type TestMetricsSuite struct {
 	suite.Suite

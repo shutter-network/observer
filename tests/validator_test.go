@@ -32,7 +32,7 @@ func (s *TestMetricsSuite) TestAggregateValidatorRegistrationMessage() {
 	index := rand.Uint64()
 
 	msg := &validatorregistry.AggregateRegistrationMessage{
-		Version:                  0,
+		Version:                  1,
 		ChainID:                  2,
 		ValidatorRegistryAddress: common.HexToAddress(ValidatorRegistryContract),
 		ValidatorIndex:           uint64(validatorIndex),
@@ -52,7 +52,7 @@ func (s *TestMetricsSuite) TestAggregateValidatorRegistrationMessage() {
 	}
 
 	sig := validatorregistry.CreateAggregateSignature(sks, msg)
-	url := mockBeaconClient(s.T(), hex.EncodeToString(pks[0].Compress()))
+	url := mockBeaconClient(s.T(), hex.EncodeToString(pks[0].Compress()), "active_ongoing")
 
 	cl, err := beaconapiclient.New(url)
 	s.Require().NoError(err)
@@ -90,7 +90,7 @@ func (s *TestMetricsSuite) TestLegacyValidatorRegistrationMessage() {
 	index := rand.Uint64()
 
 	msg := &validatorregistry.LegacyRegistrationMessage{
-		Version:                  1,
+		Version:                  0,
 		ChainID:                  2,
 		ValidatorRegistryAddress: common.HexToAddress(ValidatorRegistryContract),
 		ValidatorIndex:           uint64(validatorIndex),
@@ -103,7 +103,7 @@ func (s *TestMetricsSuite) TestLegacyValidatorRegistrationMessage() {
 	pubkey := new(blst.P1Affine).From(privkey)
 
 	sig := validatorregistry.CreateSignature(privkey, msg)
-	url := mockBeaconClient(s.T(), hex.EncodeToString(pubkey.Compress()))
+	url := mockBeaconClient(s.T(), hex.EncodeToString(pubkey.Compress()), "active_ongoing")
 
 	cl, err := beaconapiclient.New(url)
 	s.Require().NoError(err)
@@ -132,7 +132,7 @@ func (s *TestMetricsSuite) TestLegacyValidatorRegistrationMessage() {
 	s.Require().Equal(currentNonce.Int64, int64(1))
 }
 
-func mockBeaconClient(t *testing.T, pubKeyHex string) string {
+func mockBeaconClient(t *testing.T, pubKeyHex string, status string) string {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x := beaconapiclient.GetValidatorByIndexResponse{
@@ -141,6 +141,7 @@ func mockBeaconClient(t *testing.T, pubKeyHex string) string {
 				Validator: beaconapiclient.Validator{
 					PubkeyHex: pubKeyHex,
 				},
+				Status: status,
 			},
 		}
 		res, err := json.Marshal(x)
