@@ -427,6 +427,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 		go func(ctx context.Context, decryptedTx *types.Transaction, txSubEvent data.TransactionSubmittedEvent, slot int64, decryptionKeyID int64, txErrorSignalCh chan bool) {
 			// send tx to public mempool since keys are already public with a delay
 			time.Sleep(10 * time.Second)
+			defer close(txErrorSignalCh)
 
 			err = tm.ethClient.SendTransaction(ctx, decryptedTx)
 			if err != nil {
