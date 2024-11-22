@@ -10,6 +10,7 @@ type Config struct {
 	SequencerContractAddress         string
 	ValidatorRegistryContractAddress string
 	P2P                              *p2p.Config
+	InclusionDelay                   int64
 }
 
 type MetricsServerConfig struct {

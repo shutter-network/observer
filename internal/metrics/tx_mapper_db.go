@@ -424,9 +424,9 @@ func (tm *TxMapperDB) processTransactionExecution(
 		// channel to signal the other routine to stop waiting for receipt
 		txErrorSignalCh := make(chan bool)
 
-		go func(ctx context.Context, decryptedTx *types.Transaction, txSubEvent data.TransactionSubmittedEvent, slot int64, decryptionKeyID int64, txErrorSignalCh chan bool) {
+		go func(ctx context.Context, inclusionDelay int64, decryptedTx *types.Transaction, txSubEvent data.TransactionSubmittedEvent, slot int64, decryptionKeyID int64, txErrorSignalCh chan bool) {
 			// send tx to public mempool since keys are already public with a delay
-			time.Sleep(10 * time.Second)
+			time.Sleep(time.Duration(inclusionDelay) * time.Second)
 			defer close(txErrorSignalCh)
 
 			err = tm.ethClient.SendTransaction(ctx, decryptedTx)
@@ -478,7 +478,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 					return
 				}
 			}
-		}(ctx, decryptedTx, txSubEvent, slot, decryptionKeyID, txErrorSignalCh)
+		}(ctx, tm.config.InclusionDelay, decryptedTx, txSubEvent, slot, decryptionKeyID, txErrorSignalCh)
 
 		// Fire off a goroutine to wait for the transaction receipt
 		go func(ctx context.Context, index int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, txErrorSignalCh chan bool) {
