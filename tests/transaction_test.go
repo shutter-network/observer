@@ -26,6 +26,9 @@ func (s *TestMetricsSuite) TestEncryptedTransaction() {
 	sender, err := generateRandomBytes(20)
 	s.Require().NoError(err)
 
+	eventTxHash, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+
 	err = s.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
 		TxIndex:              txIndex,
 		Eon:                  eon,
@@ -36,6 +39,7 @@ func (s *TestMetricsSuite) TestEncryptedTransaction() {
 		IdentityPrefix:       identityPrefix,
 		Sender:               sender,
 		EncryptedTransaction: ectx,
+		EventTxHash:          eventTxHash,
 	})
 	s.Require().NoError(err)
 }
@@ -127,6 +131,9 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 	instanceID := rand.Int63()
 	txPointer := rand.Int63()
 
+	eventTxHash, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+
 	err = s.txMapperDB.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
 		EventBlockHash:       eventBlockHash,
 		EventBlockNumber:     eventBlockNumber,
@@ -137,6 +144,7 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 		IdentityPrefix:       identityPrefix,
 		Sender:               sender,
 		EncryptedTransaction: ectx,
+		EventTxHash:          eventTxHash,
 	})
 	s.Require().NoError(err)
 

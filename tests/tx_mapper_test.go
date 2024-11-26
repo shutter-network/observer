@@ -83,6 +83,7 @@ func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 	ctx := context.Background()
 	txIndex := rand.Int63()
 	eon := rand.Int63()
+
 	eventBlockHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 	eventBlockNumber := rand.Int63()
@@ -96,7 +97,10 @@ func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 	instanceID := rand.Int63()
 	txPointer := rand.Int63()
 
-	s.txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
+	eventTxHash, err := generateRandomBytes(32)
+	s.Require().NoError(err)
+
+	err = s.txMapperDB.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
 		EventBlockHash:       eventBlockHash,
 		EventBlockNumber:     eventBlockNumber,
 		EventTxIndex:         eventTxIndex,
@@ -106,14 +110,16 @@ func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 		IdentityPrefix:       identityPrefix,
 		Sender:               sender,
 		EncryptedTransaction: encrypedTxBytes,
+		EventTxHash:          eventTxHash,
 	})
+	s.Require().NoError(err)
 
 	decryptedMessage, err := encryptedTransaction.Decrypt(decryptionKey)
 	s.Require().NoError(err)
 
 	s.Require().Equal(tx, decryptedMessage)
 
-	err = s.txMapper.AddDecryptionKeysAndMessages(ctx, &metrics.DecKeysAndMessages{
+	err = s.txMapperDB.AddDecryptionKeysAndMessages(ctx, &metrics.DecKeysAndMessages{
 		Eon:        eon,
 		Keys:       [][]byte{decryptionKey.Marshal()},
 		Identities: [][]byte{identity.Marshal()},
