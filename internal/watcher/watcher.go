@@ -192,7 +192,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 				for _, share := range ks.Shares {
 					err := txMapper.AddKeyShare(ctx, &data.DecryptionKeyShare{
 						Eon:                ks.Eon,
-						IdentityPreimage:   share.EpochID,
+						IdentityPreimage:   share.IdentityPreimage,
 						KeyperIndex:        ks.KeyperIndex,
 						DecryptionKeyShare: share.Share,
 						Slot:               ks.Slot,

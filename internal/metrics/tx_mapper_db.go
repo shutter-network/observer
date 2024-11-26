@@ -22,7 +22,6 @@ import (
 	dbTypes "github.com/shutter-network/gnosh-metrics/common/database"
 	"github.com/shutter-network/gnosh-metrics/common/utils"
 	"github.com/shutter-network/gnosh-metrics/internal/data"
-	gnosis "github.com/shutter-network/rolling-shutter/rolling-shutter/keyperimpl/gnosis"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/validatorregistry"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
@@ -40,6 +39,11 @@ type TxMapperDB struct {
 	chainID          int64
 	genesisTimestamp uint64
 	slotDuration     uint64
+}
+
+type validatorData struct {
+	validatorStatus   string
+	validatorValidity data.ValidatorRegistrationValidity
 }
 
 func NewTxMapperDB(
@@ -212,47 +216,48 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 	defer tx.Rollback(ctx)
 	qtx := tm.dbQuery.WithTx(tx)
 
-	var validator *beaconapiclient.GetValidatorByIndexResponse
-	regMessage := &validatorregistry.RegistrationMessage{}
-	params := data.CreateValidatorRegistryMessageParams{}
+	regMessage := &validatorregistry.AggregateRegistrationMessage{}
 	err = regMessage.Unmarshal(vr.Message)
 	if err != nil {
-		params.Validity = data.ValidatorRegistrationValidityInvalidmessage
 		log.Err(err).Hex("tx-hash", vr.Raw.TxHash.Bytes()).Msg("error unmarshalling registration message")
 	} else {
-		params.Version = dbTypes.Uint64ToPgTypeInt8(uint64(regMessage.Version))
-		params.ValidatorRegistryAddress = regMessage.ValidatorRegistryAddress.Bytes()
-		params.ChainID = dbTypes.Uint64ToPgTypeInt8(regMessage.ChainID)
-		params.ValidatorIndex = dbTypes.Uint64ToPgTypeInt8(regMessage.ValidatorIndex)
-		params.Nonce = dbTypes.Uint64ToPgTypeInt8(regMessage.Nonce)
-		params.IsRegisteration = dbTypes.BoolToPgTypeBool(regMessage.IsRegistration)
-		params.Validity, validator, err = tm.validateValidatorRegistryEvent(ctx, vr, regMessage, vr.Signature)
+		validatorIDtoValidity, err := tm.validateValidatorRegistryEvent(ctx, vr, regMessage, uint64(tm.chainID), tm.config.ValidatorRegistryContractAddress)
 		if err != nil {
 			log.Err(err).Msg("error validating validator registry events")
+			return err
 		}
-	}
 
-	if params.Validity == data.ValidatorRegistrationValidityValid {
-		if validator != nil {
-			err := qtx.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
-				ValidatorIndex: dbTypes.Uint64ToPgTypeInt8(regMessage.ValidatorIndex),
-				Status:         validator.Data.Status,
+		for validatorID, validatorData := range validatorIDtoValidity {
+			err := qtx.CreateValidatorRegistryMessage(ctx, data.CreateValidatorRegistryMessageParams{
+				Version:                  dbTypes.Uint64ToPgTypeInt8(uint64(regMessage.Version)),
+				ChainID:                  dbTypes.Uint64ToPgTypeInt8(regMessage.ChainID),
+				ValidatorRegistryAddress: regMessage.ValidatorRegistryAddress.Bytes(),
+				ValidatorIndex:           dbTypes.Int64ToPgTypeInt8(validatorID),
+				Nonce:                    dbTypes.Uint64ToPgTypeInt8(uint64(regMessage.Nonce)),
+				IsRegisteration:          dbTypes.BoolToPgTypeBool(regMessage.IsRegistration),
+				Signature:                vr.Signature,
+				EventBlockNumber:         int64(vr.Raw.BlockNumber),
+				EventTxIndex:             int64(vr.Raw.TxIndex),
+				EventLogIndex:            int64(vr.Raw.Index),
+				Validity:                 validatorData.validatorValidity,
 			})
 			if err != nil {
 				return err
 			}
+
+			if validatorData.validatorValidity == data.ValidatorRegistrationValidityValid &&
+				validatorData.validatorStatus != "" {
+				err := qtx.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+					ValidatorIndex: dbTypes.Int64ToPgTypeInt8(validatorID),
+					Status:         validatorData.validatorStatus,
+				})
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	params.Signature = vr.Signature
-	params.EventBlockNumber = int64(vr.Raw.BlockNumber)
-	params.EventTxIndex = int64(vr.Raw.TxIndex)
-	params.EventLogIndex = int64(vr.Raw.Index)
-	err = qtx.CreateValidatorRegistryMessage(ctx, params)
-
-	if err != nil {
-		return err
-	}
 	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, int64(vr.Raw.BlockNumber))
 	if err != nil {
 		return err
@@ -536,104 +541,110 @@ func (tm *TxMapperDB) processTransactionExecution(
 func (tm *TxMapperDB) validateValidatorRegistryEvent(
 	ctx context.Context,
 	vr *validatorRegistryBindings.ValidatorregistryUpdated,
-	regMessage *validatorregistry.RegistrationMessage,
-	blsSignature []byte,
-) (data.ValidatorRegistrationValidity, *beaconapiclient.GetValidatorByIndexResponse, error) {
-	validity, err := tm.validateValidatorRegistryMessageContents(ctx, vr, regMessage)
-	if err != nil {
-		return validity, nil, err
-	}
-	validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", regMessage.ValidatorIndex)
-	if err != nil {
-		return data.ValidatorRegistrationValidityInvalidsignature, nil, errors.Wrapf(err, "failed to get validator %d", regMessage.ValidatorIndex)
-	}
-	if validity == data.ValidatorRegistrationValidityValid {
-		// which means message have been validated and all were passed
-		// now we need to check for signature verification
-		validity, err = tm.validateBLSSignature(ctx, vr.Signature, regMessage, validator)
+	regMessage *validatorregistry.AggregateRegistrationMessage,
+	chainID uint64,
+	validatorRegistryContractAddress string,
+) (map[int64]*validatorData, error) {
+	staticRegistrationMessageValidity := validateValidatorRegistryMessageContents(regMessage, chainID, validatorRegistryContractAddress)
+
+	var publicKeys []*blst.P1Affine
+	var validators []*beaconapiclient.GetValidatorByIndexResponse
+	validatorIDtoValidity := make(map[int64]*validatorData)
+
+	for _, validatorIndex := range regMessage.ValidatorIndices() {
+		validatorIDtoValidity[validatorIndex] = &validatorData{validatorValidity: staticRegistrationMessageValidity}
+		nonceBefore, err := tm.dbQuery.QueryValidatorRegistrationMessageNonceBefore(ctx, data.QueryValidatorRegistrationMessageNonceBeforeParams{
+			ValidatorIndex:   dbTypes.Int64ToPgTypeInt8(validatorIndex),
+			EventBlockNumber: int64(vr.Raw.BlockNumber),
+			EventTxIndex:     int64(vr.Raw.TxIndex),
+			EventLogIndex:    int64(vr.Raw.Index),
+		})
+
 		if err != nil {
-			return validity, nil, err
+			if err == pgx.ErrNoRows {
+				// No previous nonce means the message is valid regarding nonce
+				nonceBefore = pgtype.Int8{Int64: -1, Valid: true}
+			} else {
+				return nil, errors.Wrapf(err, "failed to query latest nonce for validator %d", validatorIndex)
+			}
+		}
+
+		if regMessage.Nonce > math.MaxInt32 || int64(regMessage.Nonce) <= nonceBefore.Int64 {
+			// skip the validator
+			log.Warn().
+				Uint32("nonce", regMessage.Nonce).
+				Int64("before-nonce", nonceBefore.Int64).
+				Msg("ignoring validator with invalid nonce")
+			validatorIDtoValidity[validatorIndex].validatorValidity = data.ValidatorRegistrationValidityInvalidmessage
+			continue
+		}
+		validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", uint64(validatorIndex))
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get validator %d", validatorIndex)
+		}
+		if validator == nil {
+			// validator not found
+			log.Warn().Msg("registration message for unknown validator")
+			validatorIDtoValidity[validatorIndex].validatorValidity = data.ValidatorRegistrationValidityInvalidmessage
+			continue
+		}
+		validatorIDtoValidity[validatorIndex].validatorStatus = validator.Data.Status
+		publicKey, err := validator.Data.Validator.GetPubkey()
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get public key of validator %d", validatorIndex)
+		}
+		publicKeys = append(publicKeys, publicKey)
+		validators = append(validators, validator)
+	}
+	if len(publicKeys) > 0 {
+		// now we need to check for signature verification depending on the message version
+		sig := new(blst.P2Affine).Uncompress(vr.Signature)
+		if sig == nil {
+			return nil, fmt.Errorf("ignoring registration message with undecodable signature")
+		}
+
+		if regMessage.Version == validatorregistry.LegacyValidatorRegistrationMessageVersion {
+			regMessage := new(validatorregistry.LegacyRegistrationMessage)
+			err := regMessage.Unmarshal(vr.Message)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to unmarshal legacy registration message")
+			}
+			if valid := validatorregistry.VerifySignature(sig, publicKeys[0], regMessage); !valid {
+				validatorIDtoValidity[int64(validators[0].Data.Index)].validatorValidity = data.ValidatorRegistrationValidityInvalidsignature
+				log.Warn().Msg("invalid legacy registration message with invalid signature")
+			}
+		} else {
+			if valid := validatorregistry.VerifyAggregateSignature(sig, publicKeys, regMessage); !valid {
+				for _, validator := range validators {
+					validatorIDtoValidity[int64(validator.Data.Index)].validatorValidity = data.ValidatorRegistrationValidityInvalidsignature
+				}
+				log.Warn().Msg("invalid aggregate registration message with invalid signature")
+			}
 		}
 	}
-	return validity, validator, nil
+	return validatorIDtoValidity, nil
 }
 
-func (tm *TxMapperDB) validateValidatorRegistryMessageContents(
-	ctx context.Context,
-	vr *validatorRegistryBindings.ValidatorregistryUpdated,
-	msg *validatorregistry.RegistrationMessage,
-) (data.ValidatorRegistrationValidity, error) {
+func validateValidatorRegistryMessageContents(
+	msg *validatorregistry.AggregateRegistrationMessage,
+	chainID uint64,
+	validatorRegistryContractAddress string,
+) data.ValidatorRegistrationValidity {
 	validity := data.ValidatorRegistrationValidityValid
-
-	if msg.Version != gnosis.ValidatorRegistrationMessageVersion {
-		return data.ValidatorRegistrationValidityInvalidmessage, nil
+	if msg.Version != validatorregistry.AggregateValidatorRegistrationMessageVersion &&
+		msg.Version != validatorregistry.LegacyValidatorRegistrationMessageVersion {
+		return data.ValidatorRegistrationValidityInvalidmessage
 	}
-	if msg.ChainID != uint64(tm.chainID) {
-		return data.ValidatorRegistrationValidityInvalidmessage, nil
+	if msg.ChainID != chainID {
+		return data.ValidatorRegistrationValidityInvalidmessage
 	}
-	if msg.ValidatorRegistryAddress.String() != tm.config.ValidatorRegistryContractAddress {
-		return data.ValidatorRegistrationValidityInvalidmessage, nil
+	if msg.ValidatorRegistryAddress.String() != validatorRegistryContractAddress {
+		return data.ValidatorRegistrationValidityInvalidmessage
 	}
 	if msg.ValidatorIndex > math.MaxInt64 {
-		return data.ValidatorRegistrationValidityInvalidmessage, nil
+		return data.ValidatorRegistrationValidityInvalidmessage
 	}
-
-	nonceBefore, err := tm.dbQuery.QueryValidatorRegistrationMessageNonceBefore(ctx, data.QueryValidatorRegistrationMessageNonceBeforeParams{
-		ValidatorIndex:   dbTypes.Uint64ToPgTypeInt8(msg.ValidatorIndex),
-		EventBlockNumber: int64(vr.Raw.BlockNumber),
-		EventTxIndex:     int64(vr.Raw.TxIndex),
-		EventLogIndex:    int64(vr.Raw.Index),
-	})
-
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			// No previous nonce means the message is valid regarding nonce
-			nonceBefore = pgtype.Int8{Int64: -1, Valid: true}
-		} else {
-			return data.ValidatorRegistrationValidityInvalidmessage, errors.Wrapf(err, "failed to query latest nonce for validator %d", msg.ValidatorIndex)
-		}
-	}
-
-	if msg.Nonce > math.MaxInt64 || int64(msg.Nonce) < nonceBefore.Int64 {
-		// new nonce should be less then equals to max int64
-		// new should be greater the previous nonce
-		return data.ValidatorRegistrationValidityInvalidmessage, nil
-	}
-	return validity, nil
-}
-
-func (tm *TxMapperDB) validateBLSSignature(
-	ctx context.Context,
-	blsSignature []byte,
-	msg *validatorregistry.RegistrationMessage,
-	validator *beaconapiclient.GetValidatorByIndexResponse,
-) (data.ValidatorRegistrationValidity, error) {
-	validity := data.ValidatorRegistrationValidityValid
-	if validator == nil {
-		//since validator is nil its signature is invalid automatically
-		validity = data.ValidatorRegistrationValidityInvalidsignature
-	} else {
-		pubkey, err := validator.Data.Validator.GetPubkey()
-		if err != nil {
-			// should we error out here and return?
-			log.Err(err).Uint64("validator index", msg.ValidatorIndex).Msg("failed to get pubkey of validator")
-			return data.ValidatorRegistrationValidityInvalidsignature, errors.Wrapf(err, "failed to get validator public key %d", msg.ValidatorIndex)
-		}
-		sig := new(blst.P2Affine).Uncompress(blsSignature)
-		if sig == nil {
-			validity = data.ValidatorRegistrationValidityInvalidsignature
-			log.Warn().
-				Uint64("validator index", msg.ValidatorIndex).
-				Uint64("nonce", msg.Nonce).
-				Msg("ignoring registration message with undecodable signature")
-		}
-		validSignature := validatorregistry.VerifySignature(sig, pubkey, msg)
-		if !validSignature {
-			validity = data.ValidatorRegistrationValidityInvalidsignature
-			log.Warn().Msg("ignoring registration message with invalid signature")
-		}
-	}
-	return validity, nil
+	return validity
 }
 
 func getDecryptionMessageInfos(dkam *DecKeysAndMessages) ([]int64, []int64, []int64, []int64, []int64) {
