@@ -754,7 +754,7 @@ func (tm *TxMapperDB) waitForReceipt(ctx context.Context, txHash common.Hash, tx
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case errSignal, ok := <-txErrorSignalCh: // Listen for a signal from the txErrorSignalCh
-			if !ok || errSignal {
+			if ok && errSignal {
 				return nil, fmt.Errorf("error encountered during transaction execution %s", txHash.Hex())
 			}
 		default:
