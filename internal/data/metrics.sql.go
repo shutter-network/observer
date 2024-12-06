@@ -569,25 +569,43 @@ func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidator
 	return items, nil
 }
 
-const updateDecryptedTX = `-- name: UpdateDecryptedTX :exec
-UPDATE decrypted_tx
-SET tx_status = $1, block_number = $2, updated_at = NOW()
-WHERE slot = $3 AND tx_index = $4
+const upsertTX = `-- name: UpsertTX :exec
+INSERT INTO decrypted_tx (
+	slot, 
+	tx_index, 
+	tx_hash, 
+	tx_status, 
+	decryption_key_id, 
+	transaction_submitted_event_id, 
+	block_number
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (slot, tx_index) 
+DO UPDATE
+SET tx_status = $4,
+    block_number = $7,
+    updated_at = NOW()
 `
 
-type UpdateDecryptedTXParams struct {
-	TxStatus    TxStatusVal
-	BlockNumber pgtype.Int8
-	Slot        int64
-	TxIndex     int64
+type UpsertTXParams struct {
+	Slot                        int64
+	TxIndex                     int64
+	TxHash                      []byte
+	TxStatus                    TxStatusVal
+	DecryptionKeyID             int64
+	TransactionSubmittedEventID int64
+	BlockNumber                 pgtype.Int8
 }
 
-func (q *Queries) UpdateDecryptedTX(ctx context.Context, arg UpdateDecryptedTXParams) error {
-	_, err := q.db.Exec(ctx, updateDecryptedTX,
-		arg.TxStatus,
-		arg.BlockNumber,
+func (q *Queries) UpsertTX(ctx context.Context, arg UpsertTXParams) error {
+	_, err := q.db.Exec(ctx, upsertTX,
 		arg.Slot,
 		arg.TxIndex,
+		arg.TxHash,
+		arg.TxStatus,
+		arg.DecryptionKeyID,
+		arg.TransactionSubmittedEventID,
+		arg.BlockNumber,
 	)
 	return err
 }
