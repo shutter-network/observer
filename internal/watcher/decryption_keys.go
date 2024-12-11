@@ -18,7 +18,7 @@ func (pmw *P2PMsgsWatcher) handleDecryptionKeyMsg(msg *p2pmsg.DecryptionKeys) ([
 		Eon:        int64(msg.Eon),
 		Keys:       msg.Keys,
 		Slot:       int64(extra.Slot),
-		InstanceID: int64(msg.InstanceID),
+		InstanceID: int64(msg.InstanceId),
 		TxPointer:  int64(extra.TxPointer),
 	}
 
@@ -135,7 +135,7 @@ func getDecryptionKeysAndIdentities(p2pMsgs []*p2pmsg.Key) ([][]byte, [][]byte) 
 
 	for _, msg := range p2pMsgs {
 		keys = append(keys, msg.Key)
-		identities = append(identities, msg.Identity)
+		identities = append(identities, msg.IdentityPreimage)
 	}
 
 	return keys, identities

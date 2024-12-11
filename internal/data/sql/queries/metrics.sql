@@ -159,7 +159,19 @@ INSERT INTO proposer_duties (public_key, validator_index, slot)
 SELECT * FROM data
 ON CONFLICT DO NOTHING;
 
--- name: UpdateDecryptedTX :exec
-UPDATE decrypted_tx
-SET tx_status = $1, block_number = $2, updated_at = NOW()
-WHERE slot = $3 AND tx_index = $4;
+-- name: UpsertTX :exec
+INSERT INTO decrypted_tx (
+	slot, 
+	tx_index, 
+	tx_hash, 
+	tx_status, 
+	decryption_key_id, 
+	transaction_submitted_event_id, 
+	block_number
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (slot, tx_index) 
+DO UPDATE
+SET tx_status = $4,
+    block_number = $7,
+    updated_at = NOW();

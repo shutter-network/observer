@@ -65,6 +65,10 @@ func Cmd() *cobra.Command {
 			}
 			config.P2P.Environment = env.Environment(p2pEnviroment)
 			config.P2P.DiscoveryNamespace = os.Getenv("P2P_DISCOVERY_NAMESPACE")
+			config.InclusionDelay, err = strconv.ParseInt(os.Getenv("INCLUSION_DELAY"), 10, 0)
+			if err != nil {
+				return err
+			}
 			return Start()
 		},
 	}
@@ -108,6 +112,14 @@ func Cmd() *cobra.Command {
 	cmd.PersistentFlags().String("p2pkey", "", "P2P key value (base64 encoded)")
 	viper.BindPFlag("p2pkey", cmd.PersistentFlags().Lookup("p2pkey"))
 	cmd.MarkPersistentFlagRequired("p2pkey")
+
+	cmd.PersistentFlags().Int64Var(
+		&config.InclusionDelay,
+		"inclusion-delay",
+		0,
+		"delay to send transaction onchain for testing purposes",
+	)
+
 	return cmd
 }
 
