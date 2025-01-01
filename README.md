@@ -19,6 +19,13 @@ git clone git@github.com:shutter-network/observer.git && cd observer
 ```
 and then execute
 ```shell
-./observer start --rpc-url ${RPC_URL} --beacon-api-url ${BEACON_API_URL} --sequencer-contract-address ${SEQUENCER_CONTRACT_ADDRESS} --validator-registry-contract-address ${VALIDATOR_REGISTRY_CONTRACT_ADDRESS} --p2pkey ${P2P_KEY} --inclusion-delay ${INCLUSION_DELAY}
+./observer start \
+  --rpc-url ${RPC_URL} \
+  --beacon-api-url ${BEACON_API_URL} \
+  --sequencer-contract-address ${SEQUENCER_CONTRACT_ADDRESS} \
+  --validator-registry-contract-address ${VALIDATOR_REGISTRY_CONTRACT_ADDRESS} \
+  --p2pkey ${P2P_KEY} \
+  --inclusion-delay ${INCLUSION_DELAY}
+
 ```
 you can also run it inside docker.
