@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/shutter-network/gnosh-metrics/common/utils"
-	"github.com/shutter-network/gnosh-metrics/internal/data"
+	"github.com/shutter-network/observer/common/utils"
+	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
 )
 

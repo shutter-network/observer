@@ -8,7 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
-	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/observer/common"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 

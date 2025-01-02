@@ -4,7 +4,7 @@ import (
 	"context"
 
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
-	"github.com/shutter-network/gnosh-metrics/internal/data"
+	"github.com/shutter-network/observer/internal/data"
 )
 
 type DecryptionData struct {

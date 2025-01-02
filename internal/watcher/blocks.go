@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
-	"github.com/shutter-network/gnosh-metrics/common"
+	"github.com/shutter-network/observer/common"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 

@@ -5,8 +5,8 @@ import (
 	cryptoRand "crypto/rand"
 	"math/rand"
 
-	"github.com/shutter-network/gnosh-metrics/internal/data"
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/observer/internal/data"
+	"github.com/shutter-network/observer/internal/metrics"
 )
 
 func (s *TestMetricsSuite) TestEncryptedTransaction() {
