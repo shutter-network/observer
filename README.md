@@ -1,2 +1,2 @@
-# gnosh-metrics
+# Observer
 Gnosis shutter metrics service

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/go-co-op/gocron/v2"
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/observer/internal/metrics"
 )
 
 const validatorStatusSchedulerDuration = "0 0 * * *" //midnight(12:00 am) each day

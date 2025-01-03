@@ -13,8 +13,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
-	"github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/observer/common"
+	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )

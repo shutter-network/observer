@@ -7,8 +7,8 @@ import (
 
 	cryptorand "crypto/rand"
 
-	"github.com/shutter-network/gnosh-metrics/internal/data"
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/observer/internal/data"
+	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
 	blst "github.com/supranational/blst/bindings/go"
 	"gotest.tools/assert"
