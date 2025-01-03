@@ -18,10 +18,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
-	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
-	dbTypes "github.com/shutter-network/gnosh-metrics/common/database"
-	"github.com/shutter-network/gnosh-metrics/common/utils"
-	"github.com/shutter-network/gnosh-metrics/internal/data"
+	metricsCommon "github.com/shutter-network/observer/common"
+	dbTypes "github.com/shutter-network/observer/common/database"
+	"github.com/shutter-network/observer/common/utils"
+	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/validatorregistry"
 	"github.com/shutter-network/shutter/shlib/shcrypto"
@@ -486,16 +486,19 @@ func (tm *TxMapperDB) processTransactionExecution(
 		}(ctx, tm.config.InclusionDelay, decryptedTx, txSubEvent, slot, decryptionKeyID, txErrorSignalCh)
 
 		// Fire off a goroutine to wait for the transaction receipt
-		go func(ctx context.Context, index int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, txErrorSignalCh chan bool) {
+		go func(ctx context.Context, index int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, txSubEventID int64, txErrorSignalCh chan bool) {
 			// Wait for the receipt with a timeout
 			receipt, err := tm.waitForReceiptWithTimeout(ctx, txHash, ReceiptWaitTimeout, txErrorSignalCh)
 			if err != nil {
 				log.Err(err).Msgf("failed to get receipt for transaction %s", txHash.Hex())
-				// update status to not included
-				err := tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
-					TxStatus: data.TxStatusValNotincluded,
-					Slot:     slot,
-					TxIndex:  txIndex,
+				// update/create status to not included
+				err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+					Slot:                        slot,
+					TxIndex:                     txIndex,
+					TxHash:                      txHash[:],
+					TxStatus:                    data.TxStatusValNotincluded,
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEventID,
 				})
 				if err != nil {
 					log.Err(err).Msg("failed to update decrypted tx")
@@ -533,18 +536,21 @@ func (tm *TxMapperDB) processTransactionExecution(
 					txStatus = data.TxStatusValUnshieldedinclusion
 				}
 
-				err = tm.dbQuery.UpdateDecryptedTX(ctx, data.UpdateDecryptedTXParams{
-					TxStatus:    txStatus,
-					BlockNumber: pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
-					TxIndex:     txIndex,
-					Slot:        slot,
+				err = tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+					Slot:                        slot,
+					TxIndex:                     txIndex,
+					TxHash:                      receipt.TxHash.Bytes(),
+					TxStatus:                    txStatus,
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEventID,
+					BlockNumber:                 pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
 				})
 				if err != nil {
 					log.Err(err).Msg("failed to update decrypted tx")
 					return
 				}
 			}
-		}(ctx, index, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txErrorSignalCh)
+		}(ctx, index, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txSubEvent.ID, txErrorSignalCh)
 	}
 	return nil
 }

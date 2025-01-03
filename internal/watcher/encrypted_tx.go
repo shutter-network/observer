@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
-	metricsCommon "github.com/shutter-network/gnosh-metrics/common"
+	metricsCommon "github.com/shutter-network/observer/common"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 

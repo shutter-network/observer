@@ -1,4 +1,4 @@
-module github.com/shutter-network/gnosh-metrics
+module github.com/shutter-network/observer
 
 go 1.22.0
 

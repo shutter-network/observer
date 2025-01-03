@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/shutter-network/gnosh-metrics/common"
-	"github.com/shutter-network/gnosh-metrics/internal/data"
-	"github.com/shutter-network/gnosh-metrics/internal/metrics"
+	"github.com/shutter-network/observer/common"
+	"github.com/shutter-network/observer/internal/data"
+	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/stretchr/testify/suite"
 )

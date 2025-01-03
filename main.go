@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/rs/zerolog/log"
-	"github.com/shutter-network/gnosh-metrics/cmd/cli"
+	"github.com/shutter-network/observer/cmd/cli"
 )
 
 func main() {
