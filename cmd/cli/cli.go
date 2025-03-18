@@ -136,17 +136,32 @@ func Start() error {
 		Port: 4000,
 	})
 	services = append(services, metricsServer)
+
 	db, err := database.NewDB(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create database connection: %w", err)
 	}
+	// Ensure db is always closed
+	defer func() {
+		if db != nil {
+			log.Info().Msg("Closing database connection")
+			db.Close()
+		}
+	}()
 
 	err = database.PerformMigration(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to perform database migration: %w", err)
 	}
+
 	watcher := watcher.New(&config, db)
 	scheduler := scheduler.New(&config, db)
 	services = append(services, watcher, scheduler)
-	return service.RunWithSighandler(ctx, services...)
+
+	// RunWithSighandler will handle SIGINT/SIGTERM
+	if err := service.RunWithSighandler(ctx, services...); err != nil {
+		return fmt.Errorf("service error: %w", err)
+	}
+
+	return nil
 }
