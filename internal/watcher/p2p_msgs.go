@@ -3,13 +3,11 @@ package watcher
 import (
 	"context"
 	"math"
-	"sync"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/shutter-network/observer/common"
-	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2p"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/p2pmsg"
@@ -17,15 +15,9 @@ import (
 
 type P2PMsgsWatcher struct {
 	config                *common.Config
-	blocksChannel         chan *BlockReceivedEvent
 	decryptionDataChannel chan *DecryptionKeysEvent
 	keyShareChannel       chan *KeyShareEvent
-
-	recentBlocksMux sync.Mutex
-	recentBlocks    map[uint64]*BlockReceivedEvent
-	mostRecentBlock uint64
-
-	txMapper metrics.TxMapper
+	blocksWatcher         *BlocksWatcher
 }
 
 type DecryptionKeysEvent struct {
@@ -45,20 +37,15 @@ type KeyShareEvent struct {
 
 func NewP2PMsgsWatcherWatcher(
 	config *common.Config,
-	blocksChannel chan *BlockReceivedEvent,
 	decryptionDataChannel chan *DecryptionKeysEvent,
 	keyShareChannel chan *KeyShareEvent,
-	txMapper metrics.TxMapper,
+	blocksWatcher *BlocksWatcher,
 ) *P2PMsgsWatcher {
 	return &P2PMsgsWatcher{
 		config:                config,
-		blocksChannel:         blocksChannel,
 		decryptionDataChannel: decryptionDataChannel,
 		keyShareChannel:       keyShareChannel,
-		recentBlocksMux:       sync.Mutex{},
-		recentBlocks:          make(map[uint64]*BlockReceivedEvent),
-		mostRecentBlock:       0,
-		txMapper:              txMapper,
+		blocksWatcher:         blocksWatcher,
 	}
 }
 
@@ -68,8 +55,6 @@ func (pmw *P2PMsgsWatcher) Start(ctx context.Context, runner service.Runner) err
 		return err
 	}
 	p2pService.AddMessageHandler(pmw)
-
-	runner.Go(func() error { return pmw.insertBlocks(ctx) })
 
 	return runner.StartService(p2pService)
 }
@@ -88,7 +73,7 @@ func (pmw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.
 		if extra == nil {
 			log.Warn().
 				Int("num-keys", len(msg.Keys)).
-				Uint64("most-recent-block", pmw.mostRecentBlock).
+				Uint64("most-recent-block", pmw.blocksWatcher.mostRecentBlock).
 				Msg("received DecryptionKeys without any slot")
 			return pubsub.ValidationReject, nil
 		}
@@ -103,7 +88,7 @@ func (pmw *P2PMsgsWatcher) ValidateMessage(_ context.Context, msgUntyped p2pmsg.
 		if extra == nil {
 			log.Warn().
 				Int("num-keyshares", len(msg.Shares)).
-				Uint64("most-recent-block", pmw.mostRecentBlock).
+				Uint64("most-recent-block", pmw.blocksWatcher.mostRecentBlock).
 				Msg("received DecryptionKeyShares without any slot")
 			return pubsub.ValidationReject, nil
 		}
