@@ -201,11 +201,11 @@ func (tm *TxMapperDB) AddBlock(
 }
 
 func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
-	blockNumber, err := tm.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
+	data, err := tm.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return blockNumber, nil
+	return data.BlockNumber, nil
 }
 
 func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error {
@@ -258,7 +258,10 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		}
 	}
 
-	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, int64(vr.Raw.BlockNumber))
+	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, data.CreateValidatorRegistryEventsSyncedUntilParams{
+		BlockHash:   vr.Raw.BlockHash[:],
+		BlockNumber: int64(vr.Raw.BlockNumber),
+	})
 	if err != nil {
 		return err
 	}

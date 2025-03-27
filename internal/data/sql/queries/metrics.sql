@@ -125,15 +125,15 @@ SELECT * FROM transaction_submitted_event
 WHERE eon = $1 AND tx_index >= $2 AND tx_index < $2 + $3 ORDER BY tx_index ASC;
 
 -- name: CreateValidatorRegistryEventsSyncedUntil :exec
-INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
+INSERT INTO validator_registry_events_synced_until (block_hash, block_number) VALUES ($1, $2)
 ON CONFLICT (enforce_one_row) DO UPDATE
-SET block_number = $1;
+SET block_hash = $1, block_number = $2;
 
 -- name: QueryValidatorRegistrationMessageNonceBefore :one 
 SELECT nonce FROM validator_registration_message WHERE validator_index = $1 AND event_block_number <= $2 AND event_tx_index <= $3 AND event_log_index <= $4 ORDER BY event_block_number DESC, event_tx_index DESC, event_log_index DESC FOR UPDATE;
 
 -- name: QueryValidatorRegistryEventsSyncedUntil :one
-SELECT block_number FROM validator_registry_events_synced_until LIMIT 1;
+SELECT  block_hash, block_number FROM validator_registry_events_synced_until LIMIT 1;
 
 -- name: CreateValidatorStatus :exec
 INSERT into validator_status(
@@ -175,3 +175,11 @@ DO UPDATE
 SET tx_status = $4,
     block_number = $7,
     updated_at = NOW();
+
+-- name: CreateTransactionSubmittedEventsSyncedUntil :exec
+INSERT INTO transaction_submitted_events_synced_until (block_hash, block_number) VALUES ($1, $2)
+ON CONFLICT (enforce_one_row) DO UPDATE
+SET block_hash = $1, block_number = $2;
+
+-- name: QueryTransactionSubmittedEventsSyncedUntil :one
+SELECT  block_hash, block_number FROM transaction_submitted_events_synced_until LIMIT 1;
