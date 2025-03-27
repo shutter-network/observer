@@ -33,7 +33,7 @@ func (ets *EncrptedTxSyncer) Sync(ctx context.Context, header *types.Header) err
 	// TODO: handle reorgs
 	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
 	if err != nil && err != pgx.ErrNoRows {
-		return errors.Wrap(err, "failed to query identity registered events sync status")
+		return errors.Wrap(err, "failed to query transaction submitted events sync status")
 	}
 	var start uint64
 	if err == pgx.ErrNoRows {
