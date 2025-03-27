@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
@@ -16,6 +17,7 @@ import (
 
 type ValidatorRegistrySyncer struct {
 	contract             *validatorRegistryBindings.Validatorregistry
+	db                   *pgxpool.Pool
 	dbQuery              *data.Queries
 	txMapper             metrics.TxMapper
 	syncStartBlockNumber uint64

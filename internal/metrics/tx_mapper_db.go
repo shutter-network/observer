@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	metricsCommon "github.com/shutter-network/observer/common"
 	dbTypes "github.com/shutter-network/observer/common/database"
@@ -68,20 +69,40 @@ func NewTxMapperDB(
 	}
 }
 
-func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error {
-	err := tm.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
-		EventBlockHash:       tse.EventBlockHash,
-		EventBlockNumber:     tse.EventBlockNumber,
-		EventTxIndex:         tse.EventTxIndex,
-		EventLogIndex:        tse.EventLogIndex,
-		Eon:                  tse.Eon,
-		TxIndex:              tse.TxIndex,
-		IdentityPrefix:       tse.IdentityPrefix,
-		Sender:               tse.Sender,
-		EncryptedTransaction: tse.EncryptedTransaction,
-		EventTxHash:          tse.EventTxHash,
+func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, st *sequencerBindings.SequencerTransactionSubmitted) error {
+	tx, err := tm.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := tm.dbQuery.WithTx(tx)
+
+	err = tm.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+		EventBlockHash:       st.Raw.BlockHash.Bytes(),
+		EventBlockNumber:     int64(st.Raw.BlockNumber),
+		EventTxIndex:         int64(st.Raw.TxIndex),
+		EventLogIndex:        int64(st.Raw.Index),
+		Eon:                  int64(st.Eon),
+		TxIndex:              int64(st.TxIndex),
+		IdentityPrefix:       st.IdentityPrefix[:],
+		Sender:               st.Sender.Bytes(),
+		EncryptedTransaction: st.EncryptedTransaction,
+		EventTxHash:          st.Raw.TxHash.Bytes(),
 	})
 	if err != nil {
+		return err
+	}
+	err = qtx.CreateTransactionSubmittedEventsSyncedUntil(ctx, data.CreateTransactionSubmittedEventsSyncedUntilParams{
+		BlockHash:   st.Raw.BlockHash[:],
+		BlockNumber: int64(st.Raw.BlockNumber),
+	})
+	if err != nil {
+		log.Err(err).Msg("error adding transaction submitted event until")
+		return err
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Err(err).Msg("error commiting data in the db")
 		return err
 	}
 	metricsEncTxReceived.Inc()

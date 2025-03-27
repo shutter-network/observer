@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 
+	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/observer/internal/data"
 )
@@ -49,7 +50,7 @@ type TxExecution struct {
 }
 
 type TxMapper interface {
-	AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error
+	AddTransactionSubmittedEvent(ctx context.Context, st *sequencerBindings.SequencerTransactionSubmitted) error
 	AddDecryptionKeysAndMessages(
 		ctx context.Context,
 		dkam *DecKeysAndMessages,

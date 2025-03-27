@@ -2,7 +2,6 @@ package syncer
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	"github.com/shutter-network/observer/internal/data"
+	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley"
 )
 
@@ -26,6 +26,7 @@ type EncrptedTxSyncer struct {
 	db                   *pgxpool.Pool
 	dbQuery              *data.Queries
 	ethClient            *ethclient.Client
+	txMapper             metrics.TxMapper
 	syncStartBlockNumber uint64
 }
 
@@ -65,32 +66,8 @@ func (ets *EncrptedTxSyncer) syncRange(
 	if err != nil {
 		return err
 	}
-
-	header, err := ets.ethClient.HeaderByNumber(ctx, new(big.Int).SetUint64(end))
-	if err != nil {
-		return errors.Wrap(err, "failed to get execution block header by number")
-	}
-
-	tx, err := ets.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	qtx := ets.dbQuery.WithTx(tx)
-
 	for _, event := range events {
-		err := qtx.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
-			EventBlockHash:       event.Raw.BlockHash[:],
-			EventBlockNumber:     int64(event.Raw.BlockNumber),
-			EventTxIndex:         int64(event.Raw.TxIndex),
-			EventLogIndex:        int64(event.Raw.Index),
-			Eon:                  int64(event.Eon),
-			TxIndex:              int64(event.TxIndex),
-			IdentityPrefix:       event.IdentityPrefix[:],
-			Sender:               event.Sender[:],
-			EncryptedTransaction: event.EncryptedTransaction,
-			EventTxHash:          event.Raw.TxHash[:],
-		})
+		err := ets.txMapper.AddTransactionSubmittedEvent(ctx, event)
 		if err != nil {
 			log.Err(err).Msg("err adding transaction submitted event")
 			return nil
@@ -100,19 +77,6 @@ func (ets *EncrptedTxSyncer) syncRange(
 			Hex("encrypted transaction (hex)", event.EncryptedTransaction).
 			Msg("new encrypted transaction")
 	}
-	err = qtx.CreateTransactionSubmittedEventsSyncedUntil(ctx, data.CreateTransactionSubmittedEventsSyncedUntilParams{
-		BlockNumber: int64(end),
-		BlockHash:   header.Hash().Bytes(),
-	})
-	if err != nil {
-		log.Err(err).Msg("error adding transaction submitted event until")
-		return nil
-	}
-	if err := tx.Commit(ctx); err != nil {
-		log.Err(err).Msg("unable to commit db transaction")
-		return err
-	}
-
 	log.Info().
 		Uint64("start-block", start).
 		Uint64("end-block", end).
