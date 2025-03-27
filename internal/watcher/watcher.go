@@ -10,11 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
-	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
-	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/observer/common"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
@@ -61,9 +58,6 @@ func New(
 }
 
 func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
-	txSubmittedEventChannel := make(chan *sequencerBindings.SequencerTransactionSubmitted)
-	validatorRegistryChannel := make(chan *validatorRegistryBindings.ValidatorregistryUpdated)
-
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 	keyShareChannel := make(chan *KeyShareEvent)
 
@@ -105,47 +99,14 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	)
 
 	blocksWatcher := NewBlocksWatcher(w.config, ethClient, txMapper)
-	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
-
-	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			blockNumber = int64(ValidatorRegistryDeploymentBlockNumber)
-		} else {
-			return err
-		}
-	}
-
-	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, blockNumber)
-
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, decryptionDataChannel, keyShareChannel, blocksWatcher)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
+	if err := runner.StartService(blocksWatcher, p2pMsgsWatcher); err != nil {
 		return err
 	}
 
 	runner.Go(func() error {
 		for {
 			select {
-			case txEvent := <-txSubmittedEventChannel:
-				err := txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
-					EventBlockHash:       txEvent.Raw.BlockHash[:],
-					EventBlockNumber:     int64(txEvent.Raw.BlockNumber),
-					EventTxIndex:         int64(txEvent.Raw.TxIndex),
-					EventLogIndex:        int64(txEvent.Raw.Index),
-					Eon:                  int64(txEvent.Eon),
-					TxIndex:              int64(txEvent.TxIndex),
-					IdentityPrefix:       txEvent.IdentityPrefix[:],
-					Sender:               txEvent.Sender[:],
-					EncryptedTransaction: txEvent.EncryptedTransaction,
-					EventTxHash:          txEvent.Raw.TxHash[:],
-				})
-				if err != nil {
-					log.Err(err).Msg("err adding encrypting transaction")
-					return err
-				}
-				log.Info().
-					Hex("encrypted transaction (hex)", txEvent.EncryptedTransaction).
-					Msg("new encrypted transaction")
 			case dd := <-decryptionDataChannel:
 				keys, identites := getDecryptionKeysAndIdentities(dd.Keys)
 				err := txMapper.AddDecryptionKeysAndMessages(
@@ -185,12 +146,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						Hex("key shares (hex)", share.Share).
 						Int64("slot", ks.Slot).
 						Msg("new key shares")
-				}
-			case vr := <-validatorRegistryChannel:
-				err = txMapper.AddValidatorRegistryEvent(ctx, vr)
-				if err != nil {
-					log.Err(err).Msg("err adding validator registry")
-					return err
 				}
 			case <-ctx.Done():
 				return ctx.Err()
