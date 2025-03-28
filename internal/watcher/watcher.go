@@ -7,14 +7,18 @@ import (
 	"net"
 	"time"
 
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
+	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
+	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/observer/common"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
+	"github.com/shutter-network/observer/internal/syncer"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
@@ -98,7 +102,25 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		SlotDuration,
 	)
 
-	blocksWatcher := NewBlocksWatcher(w.config, ethClient, txMapper)
+	sequencerContract, err := sequencerBindings.NewSequencer(ethCommon.HexToAddress(w.config.SequencerContractAddress), ethClient)
+	if err != nil {
+		return err
+	}
+
+	validatorRegistryContract, err := validatorRegistryBindings.NewValidatorregistry(ethCommon.HexToAddress(w.config.ValidatorRegistryContractAddress), ethClient)
+	if err != nil {
+		return err
+	}
+
+	blockNumber, err := ethClient.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+
+	transactionSubmittedSyncer := syncer.NewTransactionSubmittedSyncer(sequencerContract, w.db, ethClient, txMapper, blockNumber)
+	validatorRegistrySyncer := syncer.NewValidatorRegistrySyncer(validatorRegistryContract, w.db, txMapper, ValidatorRegistryDeploymentBlockNumber)
+
+	blocksWatcher := NewBlocksWatcher(w.config, ethClient, txMapper, transactionSubmittedSyncer, validatorRegistrySyncer)
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, decryptionDataChannel, keyShareChannel, blocksWatcher)
 	if err := runner.StartService(blocksWatcher, p2pMsgsWatcher); err != nil {
 		return err

@@ -23,6 +23,21 @@ type ValidatorRegistrySyncer struct {
 	syncStartBlockNumber uint64
 }
 
+func NewValidatorRegistrySyncer(
+	contract *validatorRegistryBindings.Validatorregistry,
+	db *pgxpool.Pool,
+	txMapper metrics.TxMapper,
+	syncStartBlockNumber uint64,
+) *ValidatorRegistrySyncer {
+	return &ValidatorRegistrySyncer{
+		contract:             contract,
+		db:                   db,
+		dbQuery:              data.New(db),
+		txMapper:             txMapper,
+		syncStartBlockNumber: syncStartBlockNumber,
+	}
+}
+
 func (vts *ValidatorRegistrySyncer) Sync(ctx context.Context, header *types.Header) error {
 	// TODO: handle reorgs
 	syncedUntil, err := vts.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)

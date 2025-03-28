@@ -11,32 +11,38 @@ import (
 	"github.com/shutter-network/observer/common/utils"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
+	"github.com/shutter-network/observer/internal/syncer"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
 
 type BlocksWatcher struct {
-	config    *common.Config
-	ethClient *ethclient.Client
+	config                     *common.Config
+	ethClient                  *ethclient.Client
+	txMapper                   metrics.TxMapper
+	transactionSubmittedSyncer *syncer.TransactionSubmittedSyncer
+	validatorRegistrySyncer    *syncer.ValidatorRegistrySyncer
 
 	recentBlocksMux sync.Mutex
 	recentBlocks    map[uint64]*types.Header
 	mostRecentBlock uint64
-
-	txMapper metrics.TxMapper
 }
 
 func NewBlocksWatcher(
 	config *common.Config,
 	ethClient *ethclient.Client,
 	txMapper metrics.TxMapper,
+	transactionSubmittedSyncer *syncer.TransactionSubmittedSyncer,
+	validatorRegistrySyncer *syncer.ValidatorRegistrySyncer,
 ) *BlocksWatcher {
 	return &BlocksWatcher{
-		config:          config,
-		ethClient:       ethClient,
-		recentBlocksMux: sync.Mutex{},
-		recentBlocks:    make(map[uint64]*types.Header),
-		mostRecentBlock: 0,
-		txMapper:        txMapper,
+		config:                     config,
+		ethClient:                  ethClient,
+		txMapper:                   txMapper,
+		transactionSubmittedSyncer: transactionSubmittedSyncer,
+		validatorRegistrySyncer:    validatorRegistrySyncer,
+		recentBlocksMux:            sync.Mutex{},
+		recentBlocks:               make(map[uint64]*types.Header),
+		mostRecentBlock:            0,
 	}
 }
 
@@ -78,6 +84,13 @@ func (bw *BlocksWatcher) processBlock(ctx context.Context, header *types.Header)
 	}
 	bw.clearOldBlocks(header)
 
+	if err := bw.transactionSubmittedSyncer.Sync(ctx, header); err != nil {
+		return err
+	}
+
+	if err := bw.validatorRegistrySyncer.Sync(ctx, header); err != nil {
+		return err
+	}
 	epoch := utils.GetEpochForBlock(header.Time, GenesisTimestamp, SlotDuration, SlotsPerEpoch)
 	if epoch > CurrentEpoch {
 		CurrentEpoch = epoch

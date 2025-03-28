@@ -21,7 +21,7 @@ const (
 	maxRequestBlockRange = 10_000
 )
 
-type EncrptedTxSyncer struct {
+type TransactionSubmittedSyncer struct {
 	contract             *sequencerBindings.Sequencer
 	db                   *pgxpool.Pool
 	dbQuery              *data.Queries
@@ -30,7 +30,24 @@ type EncrptedTxSyncer struct {
 	syncStartBlockNumber uint64
 }
 
-func (ets *EncrptedTxSyncer) Sync(ctx context.Context, header *types.Header) error {
+func NewTransactionSubmittedSyncer(
+	contract *sequencerBindings.Sequencer,
+	db *pgxpool.Pool,
+	ethClient *ethclient.Client,
+	txMapper metrics.TxMapper,
+	syncStartBlockNumber uint64,
+) *TransactionSubmittedSyncer {
+	return &TransactionSubmittedSyncer{
+		contract:             contract,
+		db:                   db,
+		dbQuery:              data.New(db),
+		ethClient:            ethClient,
+		txMapper:             txMapper,
+		syncStartBlockNumber: syncStartBlockNumber,
+	}
+}
+
+func (ets *TransactionSubmittedSyncer) Sync(ctx context.Context, header *types.Header) error {
 	// TODO: handle reorgs
 	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
 	if err != nil && err != pgx.ErrNoRows {
@@ -57,7 +74,7 @@ func (ets *EncrptedTxSyncer) Sync(ctx context.Context, header *types.Header) err
 	return nil
 }
 
-func (ets *EncrptedTxSyncer) syncRange(
+func (ets *TransactionSubmittedSyncer) syncRange(
 	ctx context.Context,
 	start,
 	end uint64,
@@ -85,7 +102,7 @@ func (ets *EncrptedTxSyncer) syncRange(
 	return nil
 }
 
-func (s *EncrptedTxSyncer) fetchEvents(
+func (s *TransactionSubmittedSyncer) fetchEvents(
 	ctx context.Context,
 	start,
 	end uint64,
