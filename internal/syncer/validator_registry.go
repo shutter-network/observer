@@ -2,9 +2,11 @@ package syncer
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
@@ -19,6 +21,7 @@ type ValidatorRegistrySyncer struct {
 	contract             *validatorRegistryBindings.Validatorregistry
 	db                   *pgxpool.Pool
 	dbQuery              *data.Queries
+	ethClient            *ethclient.Client
 	txMapper             metrics.TxMapper
 	syncStartBlockNumber uint64
 }
@@ -26,6 +29,7 @@ type ValidatorRegistrySyncer struct {
 func NewValidatorRegistrySyncer(
 	contract *validatorRegistryBindings.Validatorregistry,
 	db *pgxpool.Pool,
+	ethClient *ethclient.Client,
 	txMapper metrics.TxMapper,
 	syncStartBlockNumber uint64,
 ) *ValidatorRegistrySyncer {
@@ -33,6 +37,7 @@ func NewValidatorRegistrySyncer(
 		contract:             contract,
 		db:                   db,
 		dbQuery:              data.New(db),
+		ethClient:            ethClient,
 		txMapper:             txMapper,
 		syncStartBlockNumber: syncStartBlockNumber,
 	}
@@ -75,15 +80,28 @@ func (ets *ValidatorRegistrySyncer) syncRange(
 		return err
 	}
 
+	header, err := ets.ethClient.HeaderByNumber(ctx, new(big.Int).SetUint64(end))
+	if err != nil {
+		return errors.Wrap(err, "failed to get execution block header by number")
+	}
 	for _, event := range events {
 		err := ets.txMapper.AddValidatorRegistryEvent(ctx, event)
 		if err != nil {
 			log.Err(err).Msg("err adding validator registry updated event")
-			return nil
+			return err
 		}
 		log.Info().
 			Uint64("block", event.Raw.BlockNumber).
 			Msg("new validator registry updated message")
+	}
+
+	err = ets.dbQuery.CreateValidatorRegistryEventsSyncedUntil(ctx, data.CreateValidatorRegistryEventsSyncedUntilParams{
+		BlockNumber: int64(end),
+		BlockHash:   header.Hash().Bytes(),
+	})
+	if err != nil {
+		log.Err(err).Msg("err adding validator registry event sync until")
+		return err
 	}
 
 	log.Info().

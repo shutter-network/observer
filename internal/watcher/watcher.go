@@ -118,7 +118,7 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 	}
 
 	transactionSubmittedSyncer := syncer.NewTransactionSubmittedSyncer(sequencerContract, w.db, ethClient, txMapper, blockNumber)
-	validatorRegistrySyncer := syncer.NewValidatorRegistrySyncer(validatorRegistryContract, w.db, txMapper, ValidatorRegistryDeploymentBlockNumber)
+	validatorRegistrySyncer := syncer.NewValidatorRegistrySyncer(validatorRegistryContract, w.db, ethClient, txMapper, ValidatorRegistryDeploymentBlockNumber)
 
 	blocksWatcher := NewBlocksWatcher(w.config, ethClient, txMapper, transactionSubmittedSyncer, validatorRegistrySyncer)
 	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, decryptionDataChannel, keyShareChannel, blocksWatcher)

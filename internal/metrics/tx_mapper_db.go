@@ -70,14 +70,7 @@ func NewTxMapperDB(
 }
 
 func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, st *sequencerBindings.SequencerTransactionSubmitted) error {
-	tx, err := tm.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	qtx := tm.dbQuery.WithTx(tx)
-
-	err = tm.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+	err := tm.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
 		EventBlockHash:       st.Raw.BlockHash.Bytes(),
 		EventBlockNumber:     int64(st.Raw.BlockNumber),
 		EventTxIndex:         int64(st.Raw.TxIndex),
@@ -90,19 +83,6 @@ func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, st *sequ
 		EventTxHash:          st.Raw.TxHash.Bytes(),
 	})
 	if err != nil {
-		return err
-	}
-	err = qtx.CreateTransactionSubmittedEventsSyncedUntil(ctx, data.CreateTransactionSubmittedEventsSyncedUntilParams{
-		BlockHash:   st.Raw.BlockHash[:],
-		BlockNumber: int64(st.Raw.BlockNumber),
-	})
-	if err != nil {
-		log.Err(err).Msg("error adding transaction submitted event until")
-		return err
-	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		log.Err(err).Msg("error commiting data in the db")
 		return err
 	}
 	metricsEncTxReceived.Inc()
@@ -230,15 +210,8 @@ func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx
 }
 
 func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error {
-	tx, err := tm.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	qtx := tm.dbQuery.WithTx(tx)
-
 	regMessage := &validatorregistry.AggregateRegistrationMessage{}
-	err = regMessage.Unmarshal(vr.Message)
+	err := regMessage.Unmarshal(vr.Message)
 	if err != nil {
 		log.Err(err).Hex("tx-hash", vr.Raw.TxHash.Bytes()).Msg("error unmarshalling registration message")
 	} else {
@@ -249,7 +222,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 		}
 
 		for validatorID, validatorData := range validatorIDtoValidity {
-			err := qtx.CreateValidatorRegistryMessage(ctx, data.CreateValidatorRegistryMessageParams{
+			err := tm.dbQuery.CreateValidatorRegistryMessage(ctx, data.CreateValidatorRegistryMessageParams{
 				Version:                  dbTypes.Uint64ToPgTypeInt8(uint64(regMessage.Version)),
 				ChainID:                  dbTypes.Uint64ToPgTypeInt8(regMessage.ChainID),
 				ValidatorRegistryAddress: regMessage.ValidatorRegistryAddress.Bytes(),
@@ -268,7 +241,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 
 			if validatorData.validatorValidity == data.ValidatorRegistrationValidityValid &&
 				validatorData.validatorStatus != "" {
-				err := qtx.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+				err := tm.dbQuery.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
 					ValidatorIndex: dbTypes.Int64ToPgTypeInt8(validatorID),
 					Status:         validatorData.validatorStatus,
 				})
@@ -278,15 +251,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 			}
 		}
 	}
-
-	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, data.CreateValidatorRegistryEventsSyncedUntilParams{
-		BlockHash:   vr.Raw.BlockHash[:],
-		BlockNumber: int64(vr.Raw.BlockNumber),
-	})
-	if err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {

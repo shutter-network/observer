@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -83,22 +84,34 @@ func (ets *TransactionSubmittedSyncer) syncRange(
 	if err != nil {
 		return err
 	}
+	header, err := ets.ethClient.HeaderByNumber(ctx, new(big.Int).SetUint64(end))
+	if err != nil {
+		return errors.Wrap(err, "failed to get execution block header by number")
+	}
 	for _, event := range events {
 		err := ets.txMapper.AddTransactionSubmittedEvent(ctx, event)
 		if err != nil {
 			log.Err(err).Msg("err adding transaction submitted event")
-			return nil
+			return err
 		}
 		log.Info().
 			Uint64("block", event.Raw.BlockNumber).
 			Hex("encrypted transaction (hex)", event.EncryptedTransaction).
 			Msg("new encrypted transaction")
 	}
+	err = ets.dbQuery.CreateTransactionSubmittedEventsSyncedUntil(ctx, data.CreateTransactionSubmittedEventsSyncedUntilParams{
+		BlockNumber: int64(end),
+		BlockHash:   header.Hash().Bytes(),
+	})
+	if err != nil {
+		log.Err(err).Msg("err adding transaction submit event sync until")
+		return err
+	}
 	log.Info().
 		Uint64("start-block", start).
 		Uint64("end-block", end).
 		Int("num-inserted-events", len(events)).
-		Msg("synced registry contract")
+		Msg("synced sequencer contract")
 	return nil
 }
 
