@@ -84,8 +84,15 @@ func (ets *ValidatorRegistrySyncer) syncRange(
 	if err != nil {
 		return errors.Wrap(err, "failed to get execution block header by number")
 	}
+	tx, err := ets.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := ets.dbQuery.WithTx(tx)
+
 	for _, event := range events {
-		err := ets.txMapper.AddValidatorRegistryEvent(ctx, event)
+		err := ets.txMapper.AddValidatorRegistryEvent(ctx, tx, event)
 		if err != nil {
 			log.Err(err).Msg("err adding validator registry updated event")
 			return err
@@ -95,12 +102,17 @@ func (ets *ValidatorRegistrySyncer) syncRange(
 			Msg("new validator registry updated message")
 	}
 
-	err = ets.dbQuery.CreateValidatorRegistryEventsSyncedUntil(ctx, data.CreateValidatorRegistryEventsSyncedUntilParams{
+	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, data.CreateValidatorRegistryEventsSyncedUntilParams{
 		BlockNumber: int64(end),
 		BlockHash:   header.Hash().Bytes(),
 	})
 	if err != nil {
 		log.Err(err).Msg("err adding validator registry event sync until")
+		return err
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Err(err).Msg("unable to commit db transaction")
 		return err
 	}
 

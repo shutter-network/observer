@@ -209,7 +209,7 @@ func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx
 	return data.BlockNumber, nil
 }
 
-func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error {
+func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, tx pgx.Tx, vr *validatorRegistryBindings.ValidatorregistryUpdated) error {
 	regMessage := &validatorregistry.AggregateRegistrationMessage{}
 	err := regMessage.Unmarshal(vr.Message)
 	if err != nil {
@@ -221,8 +221,14 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 			return err
 		}
 
+		q := tm.dbQuery
+		if tx != nil {
+			// Use transaction if available
+			q = tm.dbQuery.WithTx(tx)
+		}
+
 		for validatorID, validatorData := range validatorIDtoValidity {
-			err := tm.dbQuery.CreateValidatorRegistryMessage(ctx, data.CreateValidatorRegistryMessageParams{
+			err := q.CreateValidatorRegistryMessage(ctx, data.CreateValidatorRegistryMessageParams{
 				Version:                  dbTypes.Uint64ToPgTypeInt8(uint64(regMessage.Version)),
 				ChainID:                  dbTypes.Uint64ToPgTypeInt8(regMessage.ChainID),
 				ValidatorRegistryAddress: regMessage.ValidatorRegistryAddress.Bytes(),
@@ -241,7 +247,7 @@ func (tm *TxMapperDB) AddValidatorRegistryEvent(ctx context.Context, vr *validat
 
 			if validatorData.validatorValidity == data.ValidatorRegistrationValidityValid &&
 				validatorData.validatorStatus != "" {
-				err := tm.dbQuery.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+				err := q.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
 					ValidatorIndex: dbTypes.Int64ToPgTypeInt8(validatorID),
 					Status:         validatorData.validatorStatus,
 				})
