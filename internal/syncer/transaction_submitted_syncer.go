@@ -50,7 +50,7 @@ func NewTransactionSubmittedSyncer(
 	}
 }
 
-func getNumReorgedBlocks(syncedUntil *data.QueryTransactionSubmittedEventsSyncedUntilRow, header *types.Header) int {
+func getNumReorgedBlocksForTransactionSubmitted(syncedUntil *data.QueryTransactionSubmittedEventsSyncedUntilRow, header *types.Header) int {
 	shouldBeParent := header.Number.Int64() == syncedUntil.BlockNumber+1
 	isParent := bytes.Equal(header.ParentHash.Bytes(), syncedUntil.BlockHash)
 	isReorg := shouldBeParent && !isParent
@@ -129,7 +129,7 @@ func (ets *TransactionSubmittedSyncer) handlePotentialReorg(ctx context.Context,
 		return errors.Wrap(err, "failed to query transaction submitted events sync status")
 	}
 
-	numReorgedBlocks := getNumReorgedBlocks(&syncedUntil, header)
+	numReorgedBlocks := getNumReorgedBlocksForTransactionSubmitted(&syncedUntil, header)
 	if numReorgedBlocks > 0 {
 		return ets.resetSyncStatus(ctx, numReorgedBlocks)
 	}
