@@ -369,6 +369,24 @@ func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidator
 	return err
 }
 
+const deleteDecryptedTxFromBlockNumber = `-- name: DeleteDecryptedTxFromBlockNumber :exec
+DELETE FROM decrypted_tx WHERE block_number >= $1
+`
+
+func (q *Queries) DeleteDecryptedTxFromBlockNumber(ctx context.Context, blockNumber pgtype.Int8) error {
+	_, err := q.db.Exec(ctx, deleteDecryptedTxFromBlockNumber, blockNumber)
+	return err
+}
+
+const deleteTransactionSubmittedEventsFromBlockNumber = `-- name: DeleteTransactionSubmittedEventsFromBlockNumber :exec
+DELETE FROM transaction_submitted_event WHERE event_block_number >= $1
+`
+
+func (q *Queries) DeleteTransactionSubmittedEventsFromBlockNumber(ctx context.Context, eventBlockNumber int64) error {
+	_, err := q.db.Exec(ctx, deleteTransactionSubmittedEventsFromBlockNumber, eventBlockNumber)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
