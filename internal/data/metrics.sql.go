@@ -387,6 +387,15 @@ func (q *Queries) DeleteTransactionSubmittedEventFromBlockNumber(ctx context.Con
 	return err
 }
 
+const deleteValidatorRegistrationMessageFromBlockNumber = `-- name: DeleteValidatorRegistrationMessageFromBlockNumber :exec
+DELETE FROM validator_registration_message WHERE event_block_number >= $1
+`
+
+func (q *Queries) DeleteValidatorRegistrationMessageFromBlockNumber(ctx context.Context, eventBlockNumber int64) error {
+	_, err := q.db.Exec(ctx, deleteValidatorRegistrationMessageFromBlockNumber, eventBlockNumber)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE

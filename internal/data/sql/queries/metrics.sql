@@ -189,3 +189,6 @@ DELETE FROM decrypted_tx WHERE block_number >= $1;
 
 -- name: DeleteTransactionSubmittedEventFromBlockNumber :exec
 DELETE FROM transaction_submitted_event WHERE event_block_number >= $1;
+
+-- name: DeleteValidatorRegistrationMessageFromBlockNumber :exec
+DELETE FROM validator_registration_message WHERE event_block_number >= $1;
