@@ -69,8 +69,13 @@ func NewTxMapperDB(
 	}
 }
 
-func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, st *sequencerBindings.SequencerTransactionSubmitted) error {
-	err := tm.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tx pgx.Tx, st *sequencerBindings.SequencerTransactionSubmitted) error {
+	q := tm.dbQuery
+	if tx != nil {
+		// Use transaction if available
+		q = tm.dbQuery.WithTx(tx)
+	}
+	err := q.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
 		EventBlockHash:       st.Raw.BlockHash.Bytes(),
 		EventBlockNumber:     int64(st.Raw.BlockNumber),
 		EventTxIndex:         int64(st.Raw.TxIndex),

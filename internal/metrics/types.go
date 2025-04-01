@@ -51,7 +51,7 @@ type TxExecution struct {
 }
 
 type TxMapper interface {
-	AddTransactionSubmittedEvent(ctx context.Context, st *sequencerBindings.SequencerTransactionSubmitted) error
+	AddTransactionSubmittedEvent(ctx context.Context, tx pgx.Tx, st *sequencerBindings.SequencerTransactionSubmitted) error
 	AddDecryptionKeysAndMessages(
 		ctx context.Context,
 		dkam *DecKeysAndMessages,
