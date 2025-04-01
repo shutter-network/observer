@@ -378,12 +378,12 @@ func (q *Queries) DeleteDecryptedTxFromBlockNumber(ctx context.Context, blockNum
 	return err
 }
 
-const deleteTransactionSubmittedEventsFromBlockNumber = `-- name: DeleteTransactionSubmittedEventsFromBlockNumber :exec
+const deleteTransactionSubmittedEventFromBlockNumber = `-- name: DeleteTransactionSubmittedEventFromBlockNumber :exec
 DELETE FROM transaction_submitted_event WHERE event_block_number >= $1
 `
 
-func (q *Queries) DeleteTransactionSubmittedEventsFromBlockNumber(ctx context.Context, eventBlockNumber int64) error {
-	_, err := q.db.Exec(ctx, deleteTransactionSubmittedEventsFromBlockNumber, eventBlockNumber)
+func (q *Queries) DeleteTransactionSubmittedEventFromBlockNumber(ctx context.Context, eventBlockNumber int64) error {
+	_, err := q.db.Exec(ctx, deleteTransactionSubmittedEventFromBlockNumber, eventBlockNumber)
 	return err
 }
 

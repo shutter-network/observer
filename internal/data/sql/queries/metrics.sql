@@ -187,5 +187,5 @@ SELECT  block_hash, block_number FROM transaction_submitted_events_synced_until 
 -- name: DeleteDecryptedTxFromBlockNumber :exec
 DELETE FROM decrypted_tx WHERE block_number >= $1;
 
--- name: DeleteTransactionSubmittedEventsFromBlockNumber :exec
+-- name: DeleteTransactionSubmittedEventFromBlockNumber :exec
 DELETE FROM transaction_submitted_event WHERE event_block_number >= $1;
