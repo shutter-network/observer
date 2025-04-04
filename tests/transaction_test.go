@@ -5,6 +5,9 @@ import (
 	cryptoRand "crypto/rand"
 	"math/rand"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
 )
@@ -134,18 +137,21 @@ func (s *TestMetricsSuite) TestAddFullTransaction() {
 	eventTxHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
-		EventBlockHash:       eventBlockHash,
-		EventBlockNumber:     eventBlockNumber,
-		EventTxIndex:         eventTxIndex,
-		EventLogIndex:        eventLogIndex,
-		Eon:                  eon,
-		TxIndex:              txIndex,
-		IdentityPrefix:       identityPrefix,
-		Sender:               sender,
+	s.txMapperDB.AddTransactionSubmittedEvent(ctx, nil, &sequencer.SequencerTransactionSubmitted{
+		Eon:                  uint64(eon),
+		TxIndex:              uint64(txIndex),
+		IdentityPrefix:       [32]byte(identityPrefix),
+		Sender:               common.Address(sender),
 		EncryptedTransaction: ectx,
-		EventTxHash:          eventTxHash,
+		Raw: types.Log{
+			BlockHash:   common.Hash(eventBlockHash),
+			BlockNumber: uint64(eventBlockNumber),
+			TxIndex:     uint(eventTxIndex),
+			Index:       uint(eventLogIndex),
+			TxHash:      common.Hash(eventTxHash),
+		},
 	})
+
 	s.Require().NoError(err)
 
 	err = s.txMapperDB.AddKeyShare(ctx, &data.DecryptionKeyShare{
