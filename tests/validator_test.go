@@ -68,7 +68,7 @@ func (s *TestMetricsSuite) TestAggregateValidatorRegistrationMessage() {
 		},
 	}
 	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &observerCommon.Config{ValidatorRegistryContractAddress: ValidatorRegistryContract}, &ethclient.Client{}, cl, 2, rand.Uint64(), rand.Uint64())
-	err = s.txMapperDB.AddValidatorRegistryEvent(ctx, &event)
+	err = s.txMapperDB.AddValidatorRegistryEvent(ctx, nil, &event)
 	s.Require().NoError(err)
 
 	currentNonce, err := s.dbQuery.QueryValidatorRegistrationMessageNonceBefore(ctx, data.QueryValidatorRegistrationMessageNonceBeforeParams{
@@ -119,7 +119,7 @@ func (s *TestMetricsSuite) TestLegacyValidatorRegistrationMessage() {
 		},
 	}
 	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &observerCommon.Config{ValidatorRegistryContractAddress: ValidatorRegistryContract}, &ethclient.Client{}, cl, 2, rand.Uint64(), rand.Uint64())
-	err = s.txMapperDB.AddValidatorRegistryEvent(ctx, &event)
+	err = s.txMapperDB.AddValidatorRegistryEvent(ctx, nil, &event)
 	s.Require().NoError(err)
 
 	currentNonce, err := s.dbQuery.QueryValidatorRegistrationMessageNonceBefore(ctx, data.QueryValidatorRegistrationMessageNonceBeforeParams{

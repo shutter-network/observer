@@ -7,18 +7,18 @@ import (
 	"net"
 	"time"
 
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/observer/common"
-	"github.com/shutter-network/observer/common/utils"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
+	"github.com/shutter-network/observer/internal/syncer"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/service"
 )
@@ -62,13 +62,8 @@ func New(
 }
 
 func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
-	txSubmittedEventChannel := make(chan *sequencerBindings.SequencerTransactionSubmitted)
-	validatorRegistryChannel := make(chan *validatorRegistryBindings.ValidatorregistryUpdated)
-
-	blocksChannel := make(chan *BlockReceivedEvent)
 	decryptionDataChannel := make(chan *DecryptionKeysEvent)
 	keyShareChannel := make(chan *KeyShareEvent)
-	blocksChannelForProposerDuties := make(chan *BlockReceivedEvent)
 
 	dialer := rpc.WithWebsocketDialer(websocket.Dialer{
 		HandshakeTimeout: 45 * time.Second,
@@ -107,65 +102,33 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 		SlotDuration,
 	)
 
-	blocksWatcher := NewBlocksWatcher(w.config, blocksChannel, blocksChannelForProposerDuties, ethClient)
-	encryptionTxWatcher := NewEncryptedTxWatcher(w.config, txSubmittedEventChannel, ethClient)
-
-	blockNumber, err := txMapper.QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx)
+	sequencerContract, err := sequencerBindings.NewSequencer(ethCommon.HexToAddress(w.config.SequencerContractAddress), ethClient)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			blockNumber = int64(ValidatorRegistryDeploymentBlockNumber)
-		} else {
-			return err
-		}
+		return err
 	}
 
-	validatorRegisterWatcher := NewValidatorRegistryWatcher(w.config, validatorRegistryChannel, ethClient, blockNumber)
+	validatorRegistryContract, err := validatorRegistryBindings.NewValidatorregistry(ethCommon.HexToAddress(w.config.ValidatorRegistryContractAddress), ethClient)
+	if err != nil {
+		return err
+	}
 
-	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, blocksChannel, decryptionDataChannel, keyShareChannel, txMapper)
-	if err := runner.StartService(blocksWatcher, encryptionTxWatcher, p2pMsgsWatcher, validatorRegisterWatcher); err != nil {
+	blockNumber, err := ethClient.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+
+	transactionSubmittedSyncer := syncer.NewTransactionSubmittedSyncer(sequencerContract, w.db, ethClient, txMapper, blockNumber)
+	validatorRegistrySyncer := syncer.NewValidatorRegistrySyncer(validatorRegistryContract, w.db, ethClient, txMapper, ValidatorRegistryDeploymentBlockNumber)
+
+	blocksWatcher := NewBlocksWatcher(w.config, ethClient, txMapper, transactionSubmittedSyncer, validatorRegistrySyncer)
+	p2pMsgsWatcher := NewP2PMsgsWatcherWatcher(w.config, decryptionDataChannel, keyShareChannel, blocksWatcher)
+	if err := runner.StartService(blocksWatcher, p2pMsgsWatcher); err != nil {
 		return err
 	}
 
 	runner.Go(func() error {
 		for {
 			select {
-			case ev, ok := <-blocksChannelForProposerDuties:
-				if !ok {
-					return nil
-				}
-				epoch := utils.GetEpochForBlock(ev.Header.Time, GenesisTimestamp, SlotDuration, SlotsPerEpoch)
-				if epoch > CurrentEpoch {
-					CurrentEpoch = epoch
-					nextEpoch := epoch + 1
-					err := txMapper.AddProposerDuties(ctx, nextEpoch)
-					if err != nil {
-						return err
-					}
-					log.Info().
-						Uint64("current epoch", epoch).
-						Uint64("next epoch", nextEpoch).
-						Msg("new proposer duties added")
-				}
-			case txEvent := <-txSubmittedEventChannel:
-				err := txMapper.AddTransactionSubmittedEvent(ctx, &data.TransactionSubmittedEvent{
-					EventBlockHash:       txEvent.Raw.BlockHash[:],
-					EventBlockNumber:     int64(txEvent.Raw.BlockNumber),
-					EventTxIndex:         int64(txEvent.Raw.TxIndex),
-					EventLogIndex:        int64(txEvent.Raw.Index),
-					Eon:                  int64(txEvent.Eon),
-					TxIndex:              int64(txEvent.TxIndex),
-					IdentityPrefix:       txEvent.IdentityPrefix[:],
-					Sender:               txEvent.Sender[:],
-					EncryptedTransaction: txEvent.EncryptedTransaction,
-					EventTxHash:          txEvent.Raw.TxHash[:],
-				})
-				if err != nil {
-					log.Err(err).Msg("err adding encrypting transaction")
-					return err
-				}
-				log.Info().
-					Hex("encrypted transaction (hex)", txEvent.EncryptedTransaction).
-					Msg("new encrypted transaction")
 			case dd := <-decryptionDataChannel:
 				keys, identites := getDecryptionKeysAndIdentities(dd.Keys)
 				err := txMapper.AddDecryptionKeysAndMessages(
@@ -205,12 +168,6 @@ func (w *Watcher) Start(ctx context.Context, runner service.Runner) error {
 						Hex("key shares (hex)", share.Share).
 						Int64("slot", ks.Slot).
 						Msg("new key shares")
-				}
-			case vr := <-validatorRegistryChannel:
-				err = txMapper.AddValidatorRegistryEvent(ctx, vr)
-				if err != nil {
-					log.Err(err).Msg("err adding validator registry")
-					return err
 				}
 			case <-ctx.Done():
 				return ctx.Err()

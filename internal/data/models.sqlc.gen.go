@@ -184,6 +184,12 @@ type TransactionSubmittedEvent struct {
 	EventTxHash          []byte
 }
 
+type TransactionSubmittedEventsSyncedUntil struct {
+	EnforceOneRow bool
+	BlockHash     []byte
+	BlockNumber   int64
+}
+
 type ValidatorRegistrationMessage struct {
 	ID                       int64
 	Version                  pgtype.Int8
@@ -204,6 +210,7 @@ type ValidatorRegistrationMessage struct {
 type ValidatorRegistryEventsSyncedUntil struct {
 	EnforceOneRow bool
 	BlockNumber   int64
+	BlockHash     []byte
 }
 
 type ValidatorStatus struct {

@@ -3,6 +3,8 @@ package metrics
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
+	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	"github.com/shutter-network/observer/internal/data"
 )
@@ -49,7 +51,7 @@ type TxExecution struct {
 }
 
 type TxMapper interface {
-	AddTransactionSubmittedEvent(ctx context.Context, tse *data.TransactionSubmittedEvent) error
+	AddTransactionSubmittedEvent(ctx context.Context, tx pgx.Tx, st *sequencerBindings.SequencerTransactionSubmitted) error
 	AddDecryptionKeysAndMessages(
 		ctx context.Context,
 		dkam *DecKeysAndMessages,
@@ -60,7 +62,7 @@ type TxMapper interface {
 		b *data.Block,
 	) error
 	QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error)
-	AddValidatorRegistryEvent(ctx context.Context, vr *validatorRegistryBindings.ValidatorregistryUpdated) error
+	AddValidatorRegistryEvent(ctx context.Context, tx pgx.Tx, vr *validatorRegistryBindings.ValidatorregistryUpdated) error
 	UpdateValidatorStatus(ctx context.Context) error
 	AddProposerDuties(ctx context.Context, epoch uint64) error
 }

@@ -268,14 +268,35 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 	return err
 }
 
-const createValidatorRegistryEventsSyncedUntil = `-- name: CreateValidatorRegistryEventsSyncedUntil :exec
-INSERT INTO validator_registry_events_synced_until (block_number) VALUES ($1)
+const createTransactionSubmittedEventsSyncedUntil = `-- name: CreateTransactionSubmittedEventsSyncedUntil :exec
+INSERT INTO transaction_submitted_events_synced_until (block_hash, block_number) VALUES ($1, $2)
 ON CONFLICT (enforce_one_row) DO UPDATE
-SET block_number = $1
+SET block_hash = $1, block_number = $2
 `
 
-func (q *Queries) CreateValidatorRegistryEventsSyncedUntil(ctx context.Context, blockNumber int64) error {
-	_, err := q.db.Exec(ctx, createValidatorRegistryEventsSyncedUntil, blockNumber)
+type CreateTransactionSubmittedEventsSyncedUntilParams struct {
+	BlockHash   []byte
+	BlockNumber int64
+}
+
+func (q *Queries) CreateTransactionSubmittedEventsSyncedUntil(ctx context.Context, arg CreateTransactionSubmittedEventsSyncedUntilParams) error {
+	_, err := q.db.Exec(ctx, createTransactionSubmittedEventsSyncedUntil, arg.BlockHash, arg.BlockNumber)
+	return err
+}
+
+const createValidatorRegistryEventsSyncedUntil = `-- name: CreateValidatorRegistryEventsSyncedUntil :exec
+INSERT INTO validator_registry_events_synced_until (block_hash, block_number) VALUES ($1, $2)
+ON CONFLICT (enforce_one_row) DO UPDATE
+SET block_hash = $1, block_number = $2
+`
+
+type CreateValidatorRegistryEventsSyncedUntilParams struct {
+	BlockHash   []byte
+	BlockNumber int64
+}
+
+func (q *Queries) CreateValidatorRegistryEventsSyncedUntil(ctx context.Context, arg CreateValidatorRegistryEventsSyncedUntilParams) error {
+	_, err := q.db.Exec(ctx, createValidatorRegistryEventsSyncedUntil, arg.BlockHash, arg.BlockNumber)
 	return err
 }
 
@@ -500,6 +521,22 @@ func (q *Queries) QueryTransactionSubmittedEvent(ctx context.Context, arg QueryT
 	return items, nil
 }
 
+const queryTransactionSubmittedEventsSyncedUntil = `-- name: QueryTransactionSubmittedEventsSyncedUntil :one
+SELECT  block_hash, block_number FROM transaction_submitted_events_synced_until LIMIT 1
+`
+
+type QueryTransactionSubmittedEventsSyncedUntilRow struct {
+	BlockHash   []byte
+	BlockNumber int64
+}
+
+func (q *Queries) QueryTransactionSubmittedEventsSyncedUntil(ctx context.Context) (QueryTransactionSubmittedEventsSyncedUntilRow, error) {
+	row := q.db.QueryRow(ctx, queryTransactionSubmittedEventsSyncedUntil)
+	var i QueryTransactionSubmittedEventsSyncedUntilRow
+	err := row.Scan(&i.BlockHash, &i.BlockNumber)
+	return i, err
+}
+
 const queryValidatorRegistrationMessageNonceBefore = `-- name: QueryValidatorRegistrationMessageNonceBefore :one
 SELECT nonce FROM validator_registration_message WHERE validator_index = $1 AND event_block_number <= $2 AND event_tx_index <= $3 AND event_log_index <= $4 ORDER BY event_block_number DESC, event_tx_index DESC, event_log_index DESC FOR UPDATE
 `
@@ -524,14 +561,19 @@ func (q *Queries) QueryValidatorRegistrationMessageNonceBefore(ctx context.Conte
 }
 
 const queryValidatorRegistryEventsSyncedUntil = `-- name: QueryValidatorRegistryEventsSyncedUntil :one
-SELECT block_number FROM validator_registry_events_synced_until LIMIT 1
+SELECT  block_hash, block_number FROM validator_registry_events_synced_until LIMIT 1
 `
 
-func (q *Queries) QueryValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
+type QueryValidatorRegistryEventsSyncedUntilRow struct {
+	BlockHash   []byte
+	BlockNumber int64
+}
+
+func (q *Queries) QueryValidatorRegistryEventsSyncedUntil(ctx context.Context) (QueryValidatorRegistryEventsSyncedUntilRow, error) {
 	row := q.db.QueryRow(ctx, queryValidatorRegistryEventsSyncedUntil)
-	var block_number int64
-	err := row.Scan(&block_number)
-	return block_number, err
+	var i QueryValidatorRegistryEventsSyncedUntilRow
+	err := row.Scan(&i.BlockHash, &i.BlockNumber)
+	return i, err
 }
 
 const queryValidatorStatuses = `-- name: QueryValidatorStatuses :many
