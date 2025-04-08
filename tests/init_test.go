@@ -11,6 +11,7 @@ import (
 	"github.com/shutter-network/observer/common"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
+	"github.com/shutter-network/observer/internal/syncer"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/stretchr/testify/suite"
 )
@@ -22,8 +23,9 @@ type TestMetricsSuite struct {
 
 	testDB *common.TestDatabase
 
-	txMapperDB metrics.TxMapper
-	dbQuery    *data.Queries
+	txMapperDB        metrics.TxMapper
+	txSubmittedSyncer *syncer.TransactionSubmittedSyncer
+	dbQuery           *data.Queries
 }
 
 func TestMain(t *testing.T) {
@@ -43,5 +45,6 @@ func (s *TestMetricsSuite) SetupSuite() {
 	s.testDB = common.SetupTestDatabase(migrationsPath)
 
 	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &common.Config{}, &ethclient.Client{}, &beaconapiclient.Client{}, 1, rand.Uint64(), rand.Uint64())
+	s.txSubmittedSyncer = syncer.NewTransactionSubmittedSyncer(nil, s.testDB.DbInstance, nil, s.txMapperDB, 0)
 	s.dbQuery = data.New(s.testDB.DbInstance)
 }

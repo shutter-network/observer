@@ -112,6 +112,12 @@ func (ets *TransactionSubmittedSyncer) resetSyncStatus(ctx context.Context, numR
 	if err != nil {
 		return fmt.Errorf("failed to reset transaction submitted event sync status in db, %w", err)
 	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit db transaction, %w", err)
+	}
+
 	log.Info().
 		Int("depth", numReorgedBlocks).
 		Int64("previous-synced-until", syncStatus.BlockNumber).
@@ -120,7 +126,7 @@ func (ets *TransactionSubmittedSyncer) resetSyncStatus(ctx context.Context, numR
 	return nil
 }
 
-func (ets *TransactionSubmittedSyncer) handlePotentialReorg(ctx context.Context, header *types.Header) error {
+func (ets *TransactionSubmittedSyncer) HandlePotentialReorg(ctx context.Context, header *types.Header) error {
 	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
 	if err == pgx.ErrNoRows {
 		return nil
@@ -137,7 +143,7 @@ func (ets *TransactionSubmittedSyncer) handlePotentialReorg(ctx context.Context,
 }
 
 func (ets *TransactionSubmittedSyncer) Sync(ctx context.Context, header *types.Header) error {
-	if err := ets.handlePotentialReorg(ctx, header); err != nil {
+	if err := ets.HandlePotentialReorg(ctx, header); err != nil {
 		return err
 	}
 

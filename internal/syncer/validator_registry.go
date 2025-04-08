@@ -101,6 +101,11 @@ func (vts *ValidatorRegistrySyncer) resetSyncStatus(ctx context.Context, numReor
 	if err != nil {
 		return fmt.Errorf("failed to reset validator registration event sync status in db, %w", err)
 	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit db transaction, %w", err)
+	}
 	log.Info().
 		Int("depth", numReorgedBlocks).
 		Int64("previous-synced-until", syncStatus.BlockNumber).
