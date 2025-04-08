@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -46,11 +47,11 @@ func NewValidatorRegistrySyncer(
 func (vts *ValidatorRegistrySyncer) Sync(ctx context.Context, header *types.Header) error {
 	// TODO: handle reorgs
 	syncedUntil, err := vts.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
-	if err != nil && err != pgx.ErrNoRows {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("failed to query validator registry sync status, %v", err)
 	}
 	var start uint64
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		start = vts.syncStartBlockNumber
 	} else {
 		start = uint64(syncedUntil.BlockNumber + 1)

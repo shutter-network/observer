@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -51,11 +52,11 @@ func NewTransactionSubmittedSyncer(
 func (ets *TransactionSubmittedSyncer) Sync(ctx context.Context, header *types.Header) error {
 	// TODO: handle reorgs
 	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
-	if err != nil && err != pgx.ErrNoRows {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("failed to query transaction submitted events sync status, %v", err)
 	}
 	var start uint64
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		start = ets.syncStartBlockNumber
 	} else {
 		start = uint64(syncedUntil.BlockNumber + 1)
