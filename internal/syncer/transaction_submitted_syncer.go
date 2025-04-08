@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
+	"github.com/shutter-network/observer/common/database"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley"
@@ -48,8 +50,103 @@ func NewTransactionSubmittedSyncer(
 	}
 }
 
+func getNumReorgedBlocksForTransactionSubmitted(syncedUntil *data.QueryTransactionSubmittedEventsSyncedUntilRow, header *types.Header) int {
+	shouldBeParent := header.Number.Int64() == syncedUntil.BlockNumber+1
+	isParent := bytes.Equal(header.ParentHash.Bytes(), syncedUntil.BlockHash)
+	isReorg := shouldBeParent && !isParent
+	if !isReorg {
+		return 0
+	}
+	// We don't know how deep the reorg is, so we make a conservative guess. Assuming higher depths
+	// is safer because it means we resync a little bit more.
+	depth := AssumedReorgDepth
+	if syncedUntil.BlockNumber < int64(depth) {
+		return int(syncedUntil.BlockNumber)
+	}
+	return depth
+}
+
+// resetSyncStatus clears the db from its recent history after a reorg of given depth.
+func (ets *TransactionSubmittedSyncer) resetSyncStatus(ctx context.Context, numReorgedBlocks int) error {
+	if numReorgedBlocks == 0 {
+		return nil
+	}
+
+	tx, err := ets.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := ets.dbQuery.WithTx(tx)
+
+	syncStatus, err := qtx.QueryTransactionSubmittedEventsSyncedUntil(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to query sync status from db in order to reset it, %w", err)
+	}
+	if syncStatus.BlockNumber < int64(numReorgedBlocks) {
+		return fmt.Errorf("detected reorg deeper (%d) than blocks synced (%d)", syncStatus.BlockNumber, numReorgedBlocks)
+	}
+
+	deleteFromInclusive := syncStatus.BlockNumber - int64(numReorgedBlocks) + 1
+
+	err = qtx.DeleteDecryptedTxFromBlockNumber(ctx, database.Int64ToPgTypeInt8(deleteFromInclusive))
+	if err != nil {
+		return fmt.Errorf("failed to delete decrypted tx from db, %w", err)
+	}
+
+	err = qtx.DeleteTransactionSubmittedEventFromBlockNumber(ctx, deleteFromInclusive)
+	if err != nil {
+		return fmt.Errorf("failed to delete transaction submitted events from db, %w", err)
+	}
+
+	// Currently, we don't have enough information in the db to populate block hash and slot.
+	// However, using default values here is fine since the syncer is expected to resync
+	// immediately after this function call which will set the correct values. When we do proper
+	// reorg handling, we should store the full block data of the previous blocks so that we can
+	// avoid this.
+	newSyncedUntilBlockNumber := deleteFromInclusive - 1
+	err = qtx.CreateTransactionSubmittedEventsSyncedUntil(ctx, data.CreateTransactionSubmittedEventsSyncedUntilParams{
+		BlockHash:   []byte{},
+		BlockNumber: newSyncedUntilBlockNumber,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reset transaction submitted event sync status in db, %w", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit db transaction, %w", err)
+	}
+
+	log.Info().
+		Int("depth", numReorgedBlocks).
+		Int64("previous-synced-until", syncStatus.BlockNumber).
+		Int64("new-synced-until", newSyncedUntilBlockNumber).
+		Msg("sync status reset due to reorg")
+	return nil
+}
+
+func (ets *TransactionSubmittedSyncer) HandlePotentialReorg(ctx context.Context, header *types.Header) error {
+	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to query transaction submitted events sync status, %w", err)
+	}
+
+	numReorgedBlocks := getNumReorgedBlocksForTransactionSubmitted(&syncedUntil, header)
+	if numReorgedBlocks > 0 {
+		return ets.resetSyncStatus(ctx, numReorgedBlocks)
+	}
+	return nil
+}
+
 func (ets *TransactionSubmittedSyncer) Sync(ctx context.Context, header *types.Header) error {
-	// TODO: handle reorgs
+	if err := ets.HandlePotentialReorg(ctx, header); err != nil {
+		return err
+	}
+
 	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
 	if err != nil && err != pgx.ErrNoRows {
 		return fmt.Errorf("failed to query transaction submitted events sync status, %v", err)
