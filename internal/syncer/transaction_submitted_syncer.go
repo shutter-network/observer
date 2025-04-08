@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	"github.com/shutter-network/observer/common/database"
@@ -82,22 +81,22 @@ func (ets *TransactionSubmittedSyncer) resetSyncStatus(ctx context.Context, numR
 
 	syncStatus, err := qtx.QueryTransactionSubmittedEventsSyncedUntil(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to query sync status from db in order to reset it")
+		return fmt.Errorf("failed to query sync status from db in order to reset it, %w", err)
 	}
 	if syncStatus.BlockNumber < int64(numReorgedBlocks) {
-		return errors.Wrapf(err, "detected reorg deeper (%d) than blocks synced (%d)", syncStatus.BlockNumber, numReorgedBlocks)
+		return fmt.Errorf("detected reorg deeper (%d) than blocks synced (%d)", syncStatus.BlockNumber, numReorgedBlocks)
 	}
 
 	deleteFromInclusive := syncStatus.BlockNumber - int64(numReorgedBlocks) + 1
 
 	err = qtx.DeleteDecryptedTxFromBlockNumber(ctx, database.Int64ToPgTypeInt8(deleteFromInclusive))
 	if err != nil {
-		return errors.Wrap(err, "failed to delete decrypted tx from db")
+		return fmt.Errorf("failed to delete decrypted tx from db, %w", err)
 	}
 
 	err = qtx.DeleteTransactionSubmittedEventFromBlockNumber(ctx, deleteFromInclusive)
 	if err != nil {
-		return errors.Wrap(err, "failed to delete transaction submitted events from db")
+		return fmt.Errorf("failed to delete transaction submitted events from db, %w", err)
 	}
 
 	// Currently, we don't have enough information in the db to populate block hash and slot.
@@ -111,7 +110,7 @@ func (ets *TransactionSubmittedSyncer) resetSyncStatus(ctx context.Context, numR
 		BlockNumber: newSyncedUntilBlockNumber,
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to reset transaction submitted event sync status in db")
+		return fmt.Errorf("failed to reset transaction submitted event sync status in db, %w", err)
 	}
 	log.Info().
 		Int("depth", numReorgedBlocks).
@@ -127,7 +126,7 @@ func (ets *TransactionSubmittedSyncer) handlePotentialReorg(ctx context.Context,
 		return nil
 	}
 	if err != nil {
-		return errors.Wrap(err, "failed to query transaction submitted events sync status")
+		return fmt.Errorf("failed to query transaction submitted events sync status, %w", err)
 	}
 
 	numReorgedBlocks := getNumReorgedBlocksForTransactionSubmitted(&syncedUntil, header)
