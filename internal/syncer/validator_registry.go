@@ -48,7 +48,7 @@ func (vts *ValidatorRegistrySyncer) Sync(ctx context.Context, header *types.Head
 	// TODO: handle reorgs
 	syncedUntil, err := vts.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("failed to query validator registry sync status, %v", err)
+		return fmt.Errorf("failed to query validator registry sync status, %w", err)
 	}
 	var start uint64
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -83,7 +83,7 @@ func (ets *ValidatorRegistrySyncer) syncRange(
 
 	header, err := ets.ethClient.HeaderByNumber(ctx, new(big.Int).SetUint64(end))
 	if err != nil {
-		return fmt.Errorf("failed to get execution block header by number, %v", err)
+		return fmt.Errorf("failed to get execution block header by number, %w", err)
 	}
 	tx, err := ets.db.Begin(ctx)
 	if err != nil {
@@ -137,14 +137,14 @@ func (s *ValidatorRegistrySyncer) fetchEvents(
 	}
 	it, err := s.contract.ValidatorregistryFilterer.FilterUpdated(&opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query validator registry updated events, %v", err)
+		return nil, fmt.Errorf("failed to query validator registry updated events, %w", err)
 	}
 	events := []*validatorRegistryBindings.ValidatorregistryUpdated{}
 	for it.Next() {
 		events = append(events, it.Event)
 	}
 	if it.Error() != nil {
-		return nil, fmt.Errorf("failed to iterate query validator registry updated events, %v", it.Error())
+		return nil, fmt.Errorf("failed to iterate query validator registry updated events, %w", it.Error())
 	}
 	return events, nil
 }

@@ -53,7 +53,7 @@ func (ets *TransactionSubmittedSyncer) Sync(ctx context.Context, header *types.H
 	// TODO: handle reorgs
 	syncedUntil, err := ets.dbQuery.QueryTransactionSubmittedEventsSyncedUntil(ctx)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("failed to query transaction submitted events sync status, %v", err)
+		return fmt.Errorf("failed to query transaction submitted events sync status, %w", err)
 	}
 	var start uint64
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -87,7 +87,7 @@ func (ets *TransactionSubmittedSyncer) syncRange(
 	}
 	header, err := ets.ethClient.HeaderByNumber(ctx, new(big.Int).SetUint64(end))
 	if err != nil {
-		return fmt.Errorf("failed to get execution block header by number, %v", err)
+		return fmt.Errorf("failed to get execution block header by number, %w", err)
 	}
 	tx, err := ets.db.Begin(ctx)
 	if err != nil {
@@ -140,14 +140,14 @@ func (s *TransactionSubmittedSyncer) fetchEvents(
 	}
 	it, err := s.contract.SequencerFilterer.FilterTransactionSubmitted(&opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query transaction submitted events, %v", err)
+		return nil, fmt.Errorf("failed to query transaction submitted events, %w", err)
 	}
 	events := []*sequencerBindings.SequencerTransactionSubmitted{}
 	for it.Next() {
 		events = append(events, it.Event)
 	}
 	if it.Error() != nil {
-		return nil, fmt.Errorf("failed to iterate query transaction submitted events, %v", it.Error())
+		return nil, fmt.Errorf("failed to iterate query transaction submitted events, %w", it.Error())
 	}
 	return events, nil
 }
