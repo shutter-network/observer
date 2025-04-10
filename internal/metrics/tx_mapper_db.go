@@ -279,7 +279,7 @@ func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {
 			Offset: int32(jumpBy),
 		})
 		if err != nil {
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				break
 			}
 			return err
@@ -587,7 +587,7 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 		})
 
 		if err != nil {
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				// No previous nonce means the message is valid regarding nonce
 				nonceBefore = pgtype.Int8{Int64: -1, Valid: true}
 			} else {

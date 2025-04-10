@@ -73,12 +73,12 @@ func createContainer(ctx context.Context) (testcontainers.Container, *pgxpool.Po
 	}
 	container, err := testcontainers.GenericContainer(ctx, req)
 	if err != nil {
-		return container, nil, "", fmt.Errorf("failed to start container: %v", err)
+		return container, nil, "", fmt.Errorf("failed to start container: %w", err)
 	}
 
 	p, err := container.MappedPort(ctx, "5432")
 	if err != nil {
-		return container, nil, "", fmt.Errorf("failed to get container external port: %v", err)
+		return container, nil, "", fmt.Errorf("failed to get container external port: %w", err)
 	}
 
 	log.Println("postgres container ready and running at port: ", p.Port())
@@ -88,7 +88,7 @@ func createContainer(ctx context.Context) (testcontainers.Container, *pgxpool.Po
 	dbAddr := fmt.Sprintf("localhost:%s", p.Port())
 	db, err := pgxpool.New(ctx, fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", DbUser, DbPass, dbAddr, DbName))
 	if err != nil {
-		return container, db, dbAddr, fmt.Errorf("failed to establish database connection: %v", err)
+		return container, db, dbAddr, fmt.Errorf("failed to establish database connection: %w", err)
 	}
 
 	return container, db, dbAddr, nil
