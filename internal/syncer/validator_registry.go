@@ -114,7 +114,7 @@ func (vts *ValidatorRegistrySyncer) resetSyncStatus(ctx context.Context, numReor
 	return nil
 }
 
-func (vts *ValidatorRegistrySyncer) handlePotentialReorg(ctx context.Context, header *types.Header) error {
+func (vts *ValidatorRegistrySyncer) HandlePotentialReorg(ctx context.Context, header *types.Header) error {
 	syncedUntil, err := vts.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
 	if err == pgx.ErrNoRows {
 		return nil
@@ -131,7 +131,7 @@ func (vts *ValidatorRegistrySyncer) handlePotentialReorg(ctx context.Context, he
 }
 
 func (vts *ValidatorRegistrySyncer) Sync(ctx context.Context, header *types.Header) error {
-	if err := vts.handlePotentialReorg(ctx, header); err != nil {
+	if err := vts.HandlePotentialReorg(ctx, header); err != nil {
 		return err
 	}
 

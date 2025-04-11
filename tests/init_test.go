@@ -23,9 +23,11 @@ type TestMetricsSuite struct {
 
 	testDB *common.TestDatabase
 
-	txMapperDB        metrics.TxMapper
-	txSubmittedSyncer *syncer.TransactionSubmittedSyncer
-	dbQuery           *data.Queries
+	txMapperDB              metrics.TxMapper
+	txSubmittedSyncer       *syncer.TransactionSubmittedSyncer
+	validatorRegistrySyncer *syncer.ValidatorRegistrySyncer
+
+	dbQuery *data.Queries
 }
 
 func TestMain(t *testing.T) {
@@ -46,5 +48,6 @@ func (s *TestMetricsSuite) SetupSuite() {
 
 	s.txMapperDB = metrics.NewTxMapperDB(ctx, s.testDB.DbInstance, &common.Config{}, &ethclient.Client{}, &beaconapiclient.Client{}, 1, rand.Uint64(), rand.Uint64())
 	s.txSubmittedSyncer = syncer.NewTransactionSubmittedSyncer(nil, s.testDB.DbInstance, nil, s.txMapperDB, 0)
+	s.validatorRegistrySyncer = syncer.NewValidatorRegistrySyncer(nil, s.testDB.DbInstance, nil, s.txMapperDB, 0)
 	s.dbQuery = data.New(s.testDB.DbInstance)
 }

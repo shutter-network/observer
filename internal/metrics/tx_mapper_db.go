@@ -20,12 +20,12 @@ import (
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
 	metricsCommon "github.com/shutter-network/observer/common"
+	"github.com/shutter-network/observer/common/database"
 	dbTypes "github.com/shutter-network/observer/common/database"
 	"github.com/shutter-network/observer/common/utils"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/beaconapiclient"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley/validatorregistry"
-	"github.com/shutter-network/shutter/shlib/shcrypto"
 	blst "github.com/supranational/blst/bindings/go"
 )
 
@@ -69,13 +69,13 @@ func NewTxMapperDB(
 	}
 }
 
-func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tx pgx.Tx, st *sequencerBindings.SequencerTransactionSubmitted) error {
+func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tx pgx.Tx, st *sequencerBindings.SequencerTransactionSubmitted) (int64, error) {
 	q := tm.dbQuery
 	if tx != nil {
 		// Use transaction if available
 		q = tm.dbQuery.WithTx(tx)
 	}
-	err := q.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+	id, err := q.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
 		EventBlockHash:       st.Raw.BlockHash.Bytes(),
 		EventBlockNumber:     int64(st.Raw.BlockNumber),
 		EventTxIndex:         int64(st.Raw.TxIndex),
@@ -88,10 +88,10 @@ func (tm *TxMapperDB) AddTransactionSubmittedEvent(ctx context.Context, tx pgx.T
 		EventTxHash:          st.Raw.TxHash.Bytes(),
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	metricsEncTxReceived.Inc()
-	return nil
+	return id, nil
 }
 
 func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
@@ -411,7 +411,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 				TxHash:                      common.Hash{}.Bytes(),
 				TxStatus:                    data.TxStatusValNotdecrypted,
 				DecryptionKeyID:             decryptionKeyID,
-				TransactionSubmittedEventID: txSubEvent.ID,
+				TransactionSubmittedEventID: dbTypes.Int64ToPgTypeInt8(txSubEvent.ID),
 			})
 			if err != nil {
 				log.Err(err).Msg("failed to create decrypted tx")
@@ -451,7 +451,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 							TxHash:                      decryptedTx.Hash().Bytes(),
 							TxStatus:                    data.TxStatusValPending,
 							DecryptionKeyID:             decryptionKeyID,
-							TransactionSubmittedEventID: txSubEvent.ID,
+							TransactionSubmittedEventID: dbTypes.Int64ToPgTypeInt8(txSubEvent.ID),
 						})
 						if err != nil {
 							txErrorSignalCh <- fmt.Errorf("failed to create decrypted tx: %w", err)
@@ -464,7 +464,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 							TxHash:                      decryptedTx.Hash().Bytes(),
 							TxStatus:                    data.TxStatusValInvalid,
 							DecryptionKeyID:             decryptionKeyID,
-							TransactionSubmittedEventID: txSubEvent.ID,
+							TransactionSubmittedEventID: dbTypes.Int64ToPgTypeInt8(txSubEvent.ID),
 						})
 						if err != nil {
 							log.Err(err).Msg("failed to create decrypted tx")
@@ -480,7 +480,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 						TxHash:                      decryptedTx.Hash().Bytes(),
 						TxStatus:                    data.TxStatusValPending,
 						DecryptionKeyID:             decryptionKeyID,
-						TransactionSubmittedEventID: txSubEvent.ID,
+						TransactionSubmittedEventID: dbTypes.Int64ToPgTypeInt8(txSubEvent.ID),
 					})
 					if err != nil {
 						txErrorSignalCh <- fmt.Errorf("failed to create decrypted tx: %w", err)
@@ -505,7 +505,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 					TxHash:                      txHash[:],
 					TxStatus:                    data.TxStatusValNotincluded,
 					DecryptionKeyID:             decryptionKeyID,
-					TransactionSubmittedEventID: txSubEventID,
+					TransactionSubmittedEventID: dbTypes.Int64ToPgTypeInt8(txSubEvent.ID),
 				})
 				if err != nil {
 					log.Err(err).Msg("failed to upsert decrypted tx")
@@ -550,7 +550,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 				TxHash:                      receipt.TxHash.Bytes(),
 				TxStatus:                    txStatus,
 				DecryptionKeyID:             decryptionKeyID,
-				TransactionSubmittedEventID: txSubEventID,
+				TransactionSubmittedEventID: database.Int64ToPgTypeInt8(txSubEvent.ID),
 				BlockNumber:                 pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
 			})
 			if err != nil {
@@ -691,21 +691,16 @@ func getDecryptionMessageInfos(dkam *DecKeysAndMessages) ([]int64, []int64, []in
 	return eons, slots, instanceIDs, txPointers, keyIndexes
 }
 
-func computeIdentity(prefix []byte, sender common.Address) []byte {
-	imageBytes := append(prefix, sender.Bytes()...)
-	return imageBytes
-}
-
 func getDecryptedTX(
 	txSubEvent data.TransactionSubmittedEvent,
 	identityPreimageToDecKeyAndMsg map[string]*DecKeyAndMessage,
 ) (*types.Transaction, error) {
-	identityPreimage := computeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
+	identityPreimage := utils.ComputeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
 	dkam, ok := identityPreimageToDecKeyAndMsg[hex.EncodeToString(identityPreimage)]
 	if !ok {
 		return nil, fmt.Errorf("identity preimage not found %s", hex.EncodeToString(identityPreimage))
 	}
-	tx, err := decryptTransaction(dkam.Key, txSubEvent.EncryptedTransaction)
+	tx, err := utils.DecryptTransaction(dkam.Key, txSubEvent.EncryptedTransaction)
 	if err != nil {
 		return nil, err
 	}
@@ -716,36 +711,12 @@ func getDecryptionKeyID(
 	txSubEvent data.TransactionSubmittedEvent,
 	identityPreimageToDecKeyAndMsg map[string]*DecKeyAndMessage,
 ) (int64, error) {
-	identityPreimage := computeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
+	identityPreimage := utils.ComputeIdentity(txSubEvent.IdentityPrefix, common.BytesToAddress(txSubEvent.Sender))
 	dkam, ok := identityPreimageToDecKeyAndMsg[hex.EncodeToString(identityPreimage)]
 	if !ok {
 		return 0, fmt.Errorf("identity preimage not found %s", hex.EncodeToString(identityPreimage))
 	}
 	return dkam.DecryptionKeyID, nil
-}
-
-func decryptTransaction(key []byte, encrypted []byte) (*types.Transaction, error) {
-	decryptionKey := new(shcrypto.EpochSecretKey)
-	err := decryptionKey.Unmarshal(key)
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid decryption key")
-	}
-	encryptedMsg := new(shcrypto.EncryptedMessage)
-	err = encryptedMsg.Unmarshal(encrypted)
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid encrypted msg")
-	}
-	decryptedMsg, err := encryptedMsg.Decrypt(decryptionKey)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to decrypt message")
-	}
-
-	tx := new(types.Transaction)
-	err = tx.UnmarshalBinary(decryptedMsg)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to unmarshal decrypted message to transaction type")
-	}
-	return tx, nil
 }
 
 // waitForReceiptWithTimeout waits for a transaction receipt with a provided timeout.

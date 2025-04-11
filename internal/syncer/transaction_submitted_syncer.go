@@ -3,6 +3,7 @@ package syncer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	"github.com/shutter-network/observer/common/database"
+	"github.com/shutter-network/observer/common/utils"
 	"github.com/shutter-network/observer/internal/data"
 	"github.com/shutter-network/observer/internal/metrics"
 	"github.com/shutter-network/rolling-shutter/rolling-shutter/medley"
@@ -31,6 +33,8 @@ type TransactionSubmittedSyncer struct {
 	ethClient            *ethclient.Client
 	txMapper             metrics.TxMapper
 	syncStartBlockNumber uint64
+	genesisTimestamp     uint64
+	slotDuration         uint64
 }
 
 func NewTransactionSubmittedSyncer(
@@ -39,6 +43,8 @@ func NewTransactionSubmittedSyncer(
 	ethClient *ethclient.Client,
 	txMapper metrics.TxMapper,
 	syncStartBlockNumber uint64,
+	genesisTimestamp uint64,
+	slotDuration uint64,
 ) *TransactionSubmittedSyncer {
 	return &TransactionSubmittedSyncer{
 		contract:             contract,
@@ -47,6 +53,8 @@ func NewTransactionSubmittedSyncer(
 		ethClient:            ethClient,
 		txMapper:             txMapper,
 		syncStartBlockNumber: syncStartBlockNumber,
+		genesisTimestamp:     genesisTimestamp,
+		slotDuration:         slotDuration,
 	}
 }
 
@@ -89,9 +97,14 @@ func (ets *TransactionSubmittedSyncer) resetSyncStatus(ctx context.Context, numR
 
 	deleteFromInclusive := syncStatus.BlockNumber - int64(numReorgedBlocks) + 1
 
-	err = qtx.DeleteDecryptedTxFromBlockNumber(ctx, database.Int64ToPgTypeInt8(deleteFromInclusive))
+	ids, err := qtx.QueryTranasctionSubmittedEventIDsUsingBlock(ctx, deleteFromInclusive)
 	if err != nil {
-		return fmt.Errorf("failed to delete decrypted tx from db, %w", err)
+		return fmt.Errorf("failed to query transaction submitted event ids, %w", err)
+	}
+
+	err = qtx.SetTransactionSubmittedEventIDsNullForDecryptedTX(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("unable to set ids to null, %w", err)
 	}
 
 	err = qtx.DeleteTransactionSubmittedEventFromBlockNumber(ctx, deleteFromInclusive)
@@ -191,16 +204,157 @@ func (ets *TransactionSubmittedSyncer) syncRange(
 	}
 	defer tx.Rollback(ctx)
 	qtx := ets.dbQuery.WithTx(tx)
-	for _, event := range events {
-		err := ets.txMapper.AddTransactionSubmittedEvent(ctx, tx, event)
+
+	currentBlockNumber := 0
+	txIndexInBlock := 0
+	if len(events) > 0 {
+		currentBlockNumber = int(events[0].Raw.BlockNumber)
+	}
+	for i, event := range events {
+		txSubmittedEventID, err := ets.txMapper.AddTransactionSubmittedEvent(ctx, tx, event)
 		if err != nil {
 			log.Err(err).Msg("err adding transaction submitted event")
 			return err
 		}
+
 		log.Info().
 			Uint64("block", event.Raw.BlockNumber).
 			Hex("encrypted transaction (hex)", event.EncryptedTransaction).
 			Msg("new encrypted transaction")
+
+		// check if we are processing the event in the same block
+		if currentBlockNumber == int(event.Raw.BlockNumber) {
+			// just increment in event in same block so we can compare it with
+			// correct transaction index inside the block
+			if i > 0 {
+				txIndexInBlock += 1
+			}
+		} else {
+			// realistically this condition will hit when currentBlockNumber is less then event.Raw.Blocknumber
+			// reset the index and currentBlock since we are encountering a
+			// new event which will be compared from the beginning
+			txIndexInBlock = 0
+			currentBlockNumber = int(event.Raw.BlockNumber)
+		}
+
+		// Try to find decryption keys for this event
+		dk, err := ets.dbQuery.QueryDecryptionKeyAndMessage(ctx, data.QueryDecryptionKeyAndMessageParams{
+			Eon:              database.Uint64ToPgTypeInt8(event.Eon),
+			IdentityPreimage: utils.ComputeIdentity(event.IdentityPrefix[:], event.Sender),
+		})
+		if err != nil {
+			// keys not released yet
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			} else {
+				log.Err(err).Msg("err querying decryption keys")
+				return err
+			}
+		}
+
+		// If we have decryption keys, try to decrypt and process the transaction
+		if len(dk) > 0 {
+			decryptionKey := dk[0].Key
+			slot := dk[0].Slot
+			decryptionKeyID := dk[0].ID
+
+			// Try to decrypt the transaction
+			decryptedTx, err := utils.DecryptTransaction(decryptionKey, event.EncryptedTransaction)
+			if err != nil {
+				// If decryption fails, for some unusual reason throw an error
+				return err
+			}
+
+			decryptedTxData, err := ets.dbQuery.QueryDecryptedTX(ctx, data.QueryDecryptedTXParams{
+				DecryptionKeyID: decryptionKeyID,
+				TxHash:          decryptedTx.Hash().Bytes(),
+			})
+			if err != nil {
+				log.Err(err).Msg("err querying decrypted tx from db")
+				return err
+			}
+			// Try to get transaction receipt
+			receipt, err := ets.ethClient.TransactionReceipt(ctx, decryptedTx.Hash())
+			if err != nil {
+				// If receipt not found, check if transaction is pending
+				_, isPending, err := ets.ethClient.TransactionByHash(ctx, decryptedTx.Hash())
+				if err != nil {
+					err = ets.dbQuery.UpdateDecryptedTx(ctx, data.UpdateDecryptedTxParams{
+						ID:                          decryptedTxData.ID,
+						Slot:                        decryptedTxData.Slot,
+						TxIndex:                     int64(event.TxIndex),
+						TxHash:                      decryptedTxData.TxHash,
+						TxStatus:                    decryptedTxData.TxStatus,
+						DecryptionKeyID:             decryptedTxData.DecryptionKeyID,
+						TransactionSubmittedEventID: database.Int64ToPgTypeInt8(txSubmittedEventID),
+					})
+					if err != nil {
+						log.Err(err).Msg("failed to update decrypted tx")
+						return err
+					}
+					continue
+				}
+
+				if isPending {
+					// Transaction is pending
+					err = ets.dbQuery.UpdateDecryptedTx(ctx, data.UpdateDecryptedTxParams{
+						ID:                          decryptedTxData.ID,
+						Slot:                        decryptedTxData.Slot,
+						TxIndex:                     int64(event.TxIndex),
+						TxHash:                      decryptedTxData.TxHash,
+						TxStatus:                    data.TxStatusValPending,
+						DecryptionKeyID:             decryptedTxData.DecryptionKeyID,
+						TransactionSubmittedEventID: database.Int64ToPgTypeInt8(txSubmittedEventID),
+					})
+					if err != nil {
+						log.Err(err).Msg("failed to update decrypted tx")
+						return err
+					}
+				}
+			} else if receipt != nil {
+				// Transaction is included and has a receipt
+				block, err := ets.ethClient.BlockByNumber(ctx, receipt.BlockNumber)
+				if err != nil {
+					log.Err(err).Uint64("block-number", receipt.BlockNumber.Uint64()).Msg("failed to retrieve block")
+					return err
+				}
+				inclusionSlot := utils.GetSlotForBlock(block.Header().Time, ets.genesisTimestamp, ets.slotDuration)
+
+				txStatus := data.TxStatusValShieldedinclusion
+				log.Info().Uint("tx-index", receipt.TransactionIndex).
+					Uint64("inclusion-slot", uint64(slot)).
+					Msg("receipt data")
+
+				log.Info().Int("index", txIndexInBlock).
+					Int64("inclusion-slot", slot).
+					Msg("local data")
+
+				// Check if transaction indices match
+				if receipt.TransactionIndex != uint(txIndexInBlock) {
+					log.Info().Uint("tx-index", receipt.TransactionIndex).Msg("transaction index mismatch")
+					txStatus = data.TxStatusValUnshieldedinclusion
+				}
+				// Check if slots match
+				if inclusionSlot != uint64(slot) {
+					log.Info().Int64("slot", slot).Msg("transaction slot mismatch")
+					txStatus = data.TxStatusValUnshieldedinclusion
+				}
+
+				err = ets.dbQuery.UpdateDecryptedTx(ctx, data.UpdateDecryptedTxParams{
+					ID:                          decryptedTxData.ID,
+					Slot:                        decryptedTxData.Slot,
+					TxIndex:                     int64(event.TxIndex),
+					TxHash:                      decryptedTxData.TxHash,
+					TxStatus:                    txStatus,
+					DecryptionKeyID:             decryptedTxData.DecryptionKeyID,
+					TransactionSubmittedEventID: database.Int64ToPgTypeInt8(txSubmittedEventID),
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to update decrypted tx")
+					return err
+				}
+			}
+		}
 	}
 	err = qtx.CreateTransactionSubmittedEventsSyncedUntil(ctx, data.CreateTransactionSubmittedEventsSyncedUntilParams{
 		BlockNumber: int64(end),
@@ -247,3 +401,16 @@ func (s *TransactionSubmittedSyncer) fetchEvents(
 	}
 	return events, nil
 }
+
+/*
+	slot 9  =>   block 9
+
+	slot 10  =>  block 10 => 2 seq     2 dec keys
+
+	slot 11  => block 11  => 8 seq     8 keys yet
+
+	...
+
+	slot 10 => block 10    5 decrypted txs 15 normal txs = 20 txs
+	for 5 dec txs =>
+*/
