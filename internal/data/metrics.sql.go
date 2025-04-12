@@ -58,7 +58,7 @@ type CreateDecryptedTXParams struct {
 	TxHash                      []byte
 	TxStatus                    TxStatusVal
 	DecryptionKeyID             int64
-	TransactionSubmittedEventID int64
+	TransactionSubmittedEventID pgtype.Int8
 }
 
 func (q *Queries) CreateDecryptedTX(ctx context.Context, arg CreateDecryptedTXParams) error {
@@ -222,7 +222,7 @@ func (q *Queries) CreateProposerDuties(ctx context.Context, arg CreateProposerDu
 	return err
 }
 
-const createTransactionSubmittedEvent = `-- name: CreateTransactionSubmittedEvent :exec
+const createTransactionSubmittedEvent = `-- name: CreateTransactionSubmittedEvent :one
 INSERT into transaction_submitted_event (
     event_block_hash, 
 	event_block_number,
@@ -237,6 +237,7 @@ INSERT into transaction_submitted_event (
 ) 
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT DO NOTHING
+RETURNING id
 `
 
 type CreateTransactionSubmittedEventParams struct {
@@ -252,8 +253,8 @@ type CreateTransactionSubmittedEventParams struct {
 	EventTxHash          []byte
 }
 
-func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg CreateTransactionSubmittedEventParams) error {
-	_, err := q.db.Exec(ctx, createTransactionSubmittedEvent,
+func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg CreateTransactionSubmittedEventParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createTransactionSubmittedEvent,
 		arg.EventBlockHash,
 		arg.EventBlockNumber,
 		arg.EventTxIndex,
@@ -265,7 +266,9 @@ func (q *Queries) CreateTransactionSubmittedEvent(ctx context.Context, arg Creat
 		arg.EncryptedTransaction,
 		arg.EventTxHash,
 	)
-	return err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const createTransactionSubmittedEventsSyncedUntil = `-- name: CreateTransactionSubmittedEventsSyncedUntil :exec
@@ -369,6 +372,24 @@ func (q *Queries) CreateValidatorStatus(ctx context.Context, arg CreateValidator
 	return err
 }
 
+const deleteTransactionSubmittedEventFromBlockNumber = `-- name: DeleteTransactionSubmittedEventFromBlockNumber :exec
+DELETE FROM transaction_submitted_event WHERE event_block_number >= $1
+`
+
+func (q *Queries) DeleteTransactionSubmittedEventFromBlockNumber(ctx context.Context, eventBlockNumber int64) error {
+	_, err := q.db.Exec(ctx, deleteTransactionSubmittedEventFromBlockNumber, eventBlockNumber)
+	return err
+}
+
+const deleteValidatorRegistrationMessageFromBlockNumber = `-- name: DeleteValidatorRegistrationMessageFromBlockNumber :exec
+DELETE FROM validator_registration_message WHERE event_block_number >= $1
+`
+
+func (q *Queries) DeleteValidatorRegistrationMessageFromBlockNumber(ctx context.Context, eventBlockNumber int64) error {
+	_, err := q.db.Exec(ctx, deleteValidatorRegistrationMessageFromBlockNumber, eventBlockNumber)
+	return err
+}
+
 const queryBlockFromSlot = `-- name: QueryBlockFromSlot :one
 SELECT block_hash, block_number, block_timestamp, created_at, updated_at, slot FROM block
 WHERE slot = $1 FOR UPDATE
@@ -386,6 +407,78 @@ func (q *Queries) QueryBlockFromSlot(ctx context.Context, slot int64) (Block, er
 		&i.Slot,
 	)
 	return i, err
+}
+
+const queryDecryptedTX = `-- name: QueryDecryptedTX :one
+SELECT id, slot, tx_index, tx_hash, tx_status, decryption_key_id, transaction_submitted_event_id, created_at, updated_at, block_number FROM decrypted_tx WHERE decryption_key_id = $1 AND tx_hash = $2
+`
+
+type QueryDecryptedTXParams struct {
+	DecryptionKeyID int64
+	TxHash          []byte
+}
+
+func (q *Queries) QueryDecryptedTX(ctx context.Context, arg QueryDecryptedTXParams) (DecryptedTx, error) {
+	row := q.db.QueryRow(ctx, queryDecryptedTX, arg.DecryptionKeyID, arg.TxHash)
+	var i DecryptedTx
+	err := row.Scan(
+		&i.ID,
+		&i.Slot,
+		&i.TxIndex,
+		&i.TxHash,
+		&i.TxStatus,
+		&i.DecryptionKeyID,
+		&i.TransactionSubmittedEventID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BlockNumber,
+	)
+	return i, err
+}
+
+const queryDecryptionKeyAndMessage = `-- name: QueryDecryptionKeyAndMessage :many
+SELECT
+	dk.id,
+	dk.key,
+    dkm.slot
+FROM
+    decryption_key dk
+JOIN
+    decryption_keys_message_decryption_key dkd ON dk.id = dkd.decryption_key_id
+JOIN
+    decryption_keys_message dkm ON dkm.slot = dkd.decryption_keys_message_slot
+WHERE dk.eon = $1 AND dk.identity_preimage = $2
+`
+
+type QueryDecryptionKeyAndMessageParams struct {
+	Eon              pgtype.Int8
+	IdentityPreimage []byte
+}
+
+type QueryDecryptionKeyAndMessageRow struct {
+	ID   int64
+	Key  []byte
+	Slot int64
+}
+
+func (q *Queries) QueryDecryptionKeyAndMessage(ctx context.Context, arg QueryDecryptionKeyAndMessageParams) ([]QueryDecryptionKeyAndMessageRow, error) {
+	rows, err := q.db.Query(ctx, queryDecryptionKeyAndMessage, arg.Eon, arg.IdentityPreimage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []QueryDecryptionKeyAndMessageRow
+	for rows.Next() {
+		var i QueryDecryptionKeyAndMessageRow
+		if err := rows.Scan(&i.ID, &i.Key, &i.Slot); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const queryDecryptionKeyShare = `-- name: QueryDecryptionKeyShare :many
@@ -469,6 +562,30 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const queryTranasctionSubmittedEventIDsUsingBlock = `-- name: QueryTranasctionSubmittedEventIDsUsingBlock :many
+SELECT id FROM transaction_submitted_event WHERE event_block_number >= $1
+`
+
+func (q *Queries) QueryTranasctionSubmittedEventIDsUsingBlock(ctx context.Context, eventBlockNumber int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, queryTranasctionSubmittedEventIDsUsingBlock, eventBlockNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -611,6 +728,53 @@ func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidator
 	return items, nil
 }
 
+const setTransactionSubmittedEventIDsNullForDecryptedTX = `-- name: SetTransactionSubmittedEventIDsNullForDecryptedTX :exec
+UPDATE decrypted_tx
+SET transaction_submitted_event_id = NULL
+WHERE transaction_submitted_event_id = ANY($1::bigint[])
+`
+
+func (q *Queries) SetTransactionSubmittedEventIDsNullForDecryptedTX(ctx context.Context, dollar_1 []int64) error {
+	_, err := q.db.Exec(ctx, setTransactionSubmittedEventIDsNullForDecryptedTX, dollar_1)
+	return err
+}
+
+const updateDecryptedTx = `-- name: UpdateDecryptedTx :exec
+UPDATE decrypted_tx
+SET
+  slot = $2,
+  tx_index = $3,
+  tx_hash = $4,
+  tx_status = $5,
+  decryption_key_id = $6,
+  transaction_submitted_event_id = $7,
+  updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateDecryptedTxParams struct {
+	ID                          int64
+	Slot                        int64
+	TxIndex                     int64
+	TxHash                      []byte
+	TxStatus                    TxStatusVal
+	DecryptionKeyID             int64
+	TransactionSubmittedEventID pgtype.Int8
+}
+
+func (q *Queries) UpdateDecryptedTx(ctx context.Context, arg UpdateDecryptedTxParams) error {
+	_, err := q.db.Exec(ctx, updateDecryptedTx,
+		arg.ID,
+		arg.Slot,
+		arg.TxIndex,
+		arg.TxHash,
+		arg.TxStatus,
+		arg.DecryptionKeyID,
+		arg.TransactionSubmittedEventID,
+	)
+	return err
+}
+
 const upsertTX = `-- name: UpsertTX :exec
 INSERT INTO decrypted_tx (
 	slot, 
@@ -635,7 +799,7 @@ type UpsertTXParams struct {
 	TxHash                      []byte
 	TxStatus                    TxStatusVal
 	DecryptionKeyID             int64
-	TransactionSubmittedEventID int64
+	TransactionSubmittedEventID pgtype.Int8
 	BlockNumber                 pgtype.Int8
 }
 

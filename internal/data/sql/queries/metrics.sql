@@ -1,4 +1,4 @@
--- name: CreateTransactionSubmittedEvent :exec
+-- name: CreateTransactionSubmittedEvent :one
 INSERT into transaction_submitted_event (
     event_block_hash, 
 	event_block_number,
@@ -12,7 +12,8 @@ INSERT into transaction_submitted_event (
 	event_tx_hash
 ) 
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT DO NOTHING;
+ON CONFLICT DO NOTHING
+RETURNING id;
 
 -- name: CreateDecryptionKeyMessages :exec
 WITH data (slot, instance_id, eon, tx_pointer) AS (
@@ -183,3 +184,46 @@ SET block_hash = $1, block_number = $2;
 
 -- name: QueryTransactionSubmittedEventsSyncedUntil :one
 SELECT  block_hash, block_number FROM transaction_submitted_events_synced_until LIMIT 1;
+
+-- name: QueryTranasctionSubmittedEventIDsUsingBlock :many
+SELECT id FROM transaction_submitted_event WHERE event_block_number >= $1; ;
+
+-- name: SetTransactionSubmittedEventIDsNullForDecryptedTX :exec
+UPDATE decrypted_tx
+SET transaction_submitted_event_id = NULL
+WHERE transaction_submitted_event_id = ANY($1::bigint[]);
+
+
+-- name: DeleteTransactionSubmittedEventFromBlockNumber :exec
+DELETE FROM transaction_submitted_event WHERE event_block_number >= $1;
+
+-- name: DeleteValidatorRegistrationMessageFromBlockNumber :exec
+DELETE FROM validator_registration_message WHERE event_block_number >= $1;
+
+-- name: QueryDecryptionKeyAndMessage :many
+SELECT
+	dk.id,
+	dk.key,
+    dkm.slot
+FROM
+    decryption_key dk
+JOIN
+    decryption_keys_message_decryption_key dkd ON dk.id = dkd.decryption_key_id
+JOIN
+    decryption_keys_message dkm ON dkm.slot = dkd.decryption_keys_message_slot
+WHERE dk.eon = $1 AND dk.identity_preimage = $2;
+
+-- name: QueryDecryptedTX :one
+SELECT * FROM decrypted_tx WHERE decryption_key_id = $1 AND tx_hash = $2;
+
+-- name: UpdateDecryptedTx :exec
+UPDATE decrypted_tx
+SET
+  slot = $2,
+  tx_index = $3,
+  tx_hash = $4,
+  tx_status = $5,
+  decryption_key_id = $6,
+  transaction_submitted_event_id = $7,
+  updated_at = NOW()
+WHERE id = $1;

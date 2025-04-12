@@ -102,7 +102,7 @@ func (s *TestMetricsSuite) TestAddTransactionSubmittedEventAndDecryptionData() {
 	eventTxHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	err = s.txMapperDB.AddTransactionSubmittedEvent(ctx, nil, &sequencer.SequencerTransactionSubmitted{
+	_, err = s.txMapperDB.AddTransactionSubmittedEvent(ctx, nil, &sequencer.SequencerTransactionSubmitted{
 		Eon:                  uint64(eon),
 		TxIndex:              uint64(txIndex),
 		IdentityPrefix:       [32]byte(identityPrefix),
