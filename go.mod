@@ -210,7 +210,7 @@ require (
 )
 
 require (
-	github.com/ethereum/go-ethereum v1.13.11
+	github.com/ethereum/go-ethereum v1.15.10
 	github.com/go-co-op/gocron/v2 v2.11.0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgx/v5 v5.6.0
