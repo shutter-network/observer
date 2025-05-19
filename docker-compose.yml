@@ -18,14 +18,14 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=shutter_metrics
+      - DB_NAME=shutter_chiado
       - DB_SSL_MODE=disable
       - P2P_BOOTSTRAP_ADDRESSES=${P2P_BOOTSTRAP_ADDRESSES}
       - P2P_ENVIRONMENT=${P2P_ENVIRONMENT}
       - P2P_DISCOVERY_NAMESPACE=${P2P_DISCOVERY_NAMESPACE}
       - INCLUSION_DELAY=${INCLUSION_DELAY}
     ports:
-      - "23003:23003"
+      - "23004:23003"
     command: ["start", "--rpc-url", "${RPC_URL}", "--beacon-api-url", "${BEACON_API_URL}", "--sequencer-contract-address", "${SEQUENCER_CONTRACT_ADDRESS}", "--validator-registry-contract-address", "${VALIDATOR_REGISTRY_CONTRACT_ADDRESS}", "--p2pkey", "${P2P_KEY}", "--inclusion-delay", "${INCLUSION_DELAY}"]
 
   db:
@@ -34,9 +34,9 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=shutter_metrics
+      - POSTGRES_DB=shutter_chiado
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgchiadodata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       start_interval: "2s"
@@ -54,4 +54,4 @@ services:
       - "9090:9090"
 
 volumes:
-  pgdata:
+  pgchiadodata:
