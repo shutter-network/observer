@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -44,8 +45,97 @@ func NewValidatorRegistrySyncer(
 	}
 }
 
+func getNumReorgedBlocksForValidatorRegistrations(syncedUntil *data.QueryValidatorRegistryEventsSyncedUntilRow, header *types.Header) int {
+	shouldBeParent := header.Number.Int64() == syncedUntil.BlockNumber+1
+	isParent := bytes.Equal(header.ParentHash.Bytes(), syncedUntil.BlockHash)
+	isReorg := shouldBeParent && !isParent
+	if !isReorg {
+		return 0
+	}
+	// We don't know how deep the reorg is, so we make a conservative guess. Assuming higher depths
+	// is safer because it means we resync a little bit more.
+	depth := AssumedReorgDepth
+	if syncedUntil.BlockNumber < int64(depth) {
+		return int(syncedUntil.BlockNumber)
+	}
+	return depth
+}
+
+// resetSyncStatus clears the db from its recent history after a reorg of given depth.
+func (vts *ValidatorRegistrySyncer) resetSyncStatus(ctx context.Context, numReorgedBlocks int) error {
+	if numReorgedBlocks == 0 {
+		return nil
+	}
+
+	tx, err := vts.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	qtx := vts.dbQuery.WithTx(tx)
+
+	syncStatus, err := qtx.QueryValidatorRegistryEventsSyncedUntil(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to query sync status from db in order to reset it, %w", err)
+	}
+	if syncStatus.BlockNumber < int64(numReorgedBlocks) {
+		return fmt.Errorf("detected reorg deeper (%d) than blocks synced (%d)", syncStatus.BlockNumber, numReorgedBlocks)
+	}
+
+	deleteFromInclusive := syncStatus.BlockNumber - int64(numReorgedBlocks) + 1
+
+	err = qtx.DeleteValidatorRegistrationMessageFromBlockNumber(ctx, deleteFromInclusive)
+	if err != nil {
+		return fmt.Errorf("failed to delete validator registration event from db, %w", err)
+	}
+
+	// Currently, we don't have enough information in the db to populate block hash and slot.
+	// However, using default values here is fine since the syncer is expected to resync
+	// immediately after this function call which will set the correct values. When we do proper
+	// reorg handling, we should store the full block data of the previous blocks so that we can
+	// avoid this.
+	newSyncedUntilBlockNumber := deleteFromInclusive - 1
+	err = qtx.CreateValidatorRegistryEventsSyncedUntil(ctx, data.CreateValidatorRegistryEventsSyncedUntilParams{
+		BlockHash:   []byte{},
+		BlockNumber: newSyncedUntilBlockNumber,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reset validator registration event sync status in db, %w", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to commit db transaction, %w", err)
+	}
+	log.Info().
+		Int("depth", numReorgedBlocks).
+		Int64("previous-synced-until", syncStatus.BlockNumber).
+		Int64("new-synced-until", newSyncedUntilBlockNumber).
+		Msg("sync status reset due to reorg")
+	return nil
+}
+
+func (vts *ValidatorRegistrySyncer) HandlePotentialReorg(ctx context.Context, header *types.Header) error {
+	syncedUntil, err := vts.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to query validator registry events sync status, %w", err)
+	}
+
+	numReorgedBlocks := getNumReorgedBlocksForValidatorRegistrations(&syncedUntil, header)
+	if numReorgedBlocks > 0 {
+		return vts.resetSyncStatus(ctx, numReorgedBlocks)
+	}
+	return nil
+}
+
 func (vts *ValidatorRegistrySyncer) Sync(ctx context.Context, header *types.Header) error {
-	// TODO: handle reorgs
+	if err := vts.HandlePotentialReorg(ctx, header); err != nil {
+		return err
+	}
+
 	syncedUntil, err := vts.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("failed to query validator registry sync status, %w", err)

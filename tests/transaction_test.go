@@ -32,7 +32,7 @@ func (s *TestMetricsSuite) TestEncryptedTransaction() {
 	eventTxHash, err := generateRandomBytes(32)
 	s.Require().NoError(err)
 
-	err = s.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
+	_, err = s.dbQuery.CreateTransactionSubmittedEvent(ctx, data.CreateTransactionSubmittedEventParams{
 		TxIndex:              txIndex,
 		Eon:                  eon,
 		EventBlockHash:       eventBlockHash,
