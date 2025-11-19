@@ -65,4 +65,5 @@ type TxMapper interface {
 	AddValidatorRegistryEvent(ctx context.Context, tx pgx.Tx, vr *validatorRegistryBindings.ValidatorregistryUpdated) error
 	UpdateValidatorStatus(ctx context.Context) error
 	AddProposerDuties(ctx context.Context, epoch uint64) error
+	UpsertGraffitiIfShutterized(ctx context.Context, validatorIndex int64, graffiti string, blockNumber int64) (bool, error)
 }

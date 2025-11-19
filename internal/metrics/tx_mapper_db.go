@@ -788,3 +788,12 @@ func (tm *TxMapperDB) waitForReceipt(ctx context.Context, txHash common.Hash, tx
 		return receipt, nil
 	}
 }
+
+func (tm *TxMapperDB) UpsertGraffitiIfShutterized(ctx context.Context, validatorIndex int64, graffiti string, blockNumber int64) (bool, error) {
+	upserted, err := tm.dbQuery.UpsertGraffitiIfShutterized(ctx, data.UpsertGraffitiIfShutterizedParams{
+		ValidatorIndex: dbTypes.Int64ToPgTypeInt8(validatorIndex),
+		Graffiti:       graffiti,
+		BlockNumber:    blockNumber,
+	})
+	return upserted, err
+}

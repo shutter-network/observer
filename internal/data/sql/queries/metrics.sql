@@ -183,3 +183,28 @@ SET block_hash = $1, block_number = $2;
 
 -- name: QueryTransactionSubmittedEventsSyncedUntil :one
 SELECT  block_hash, block_number FROM transaction_submitted_events_synced_until LIMIT 1;
+
+-- name: UpsertGraffitiIfShutterized :one
+WITH upserted AS (
+    INSERT INTO validator_graffiti (
+        validator_index,
+        graffiti,
+        block_number,
+        created_at,
+        updated_at
+    )
+    SELECT $1, $2, $3, NOW(), NOW()
+    WHERE EXISTS (
+        SELECT 1
+        FROM validator_registration_message
+        WHERE validator_registration_message.validator_index = $1
+    )
+    ON CONFLICT (validator_index)
+    DO UPDATE SET
+        graffiti = $2,
+        block_number = $3,
+        updated_at = NOW()
+    RETURNING 1
+)
+SELECT EXISTS (SELECT 1 FROM upserted) AS did_upsert;
+
