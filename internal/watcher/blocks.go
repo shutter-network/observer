@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -62,7 +63,7 @@ func NewBlocksWatcher(
 		txMapper:                   txMapper,
 		transactionSubmittedSyncer: transactionSubmittedSyncer,
 		validatorRegistrySyncer:    validatorRegistrySyncer,
-		beaconClient:               &http.Client{},
+		beaconClient:               &http.Client{Timeout: 10 * time.Second},
 		recentBlocksMux:            sync.Mutex{},
 		recentBlocks:               make(map[uint64]*types.Header),
 		mostRecentBlock:            0,
@@ -198,7 +199,11 @@ func (bw *BlocksWatcher) getBlockHeaderFromSlot(slot uint64) (*types.Header, boo
 }
 
 func (bw *BlocksWatcher) processGraffiti(ctx context.Context, header *types.Header) error {
+	if header.ParentBeaconRoot == nil {
+		return fmt.Errorf("parent beacon root not available")
+	}
 	beaconRoot := header.ParentBeaconRoot.Hex()
+	//when processing execution block N, the ParentBeaconBlockRoot points to the parent beacon block, so we are actually storing graffiti and proposer info for block N-1
 	url := fmt.Sprintf("%s/eth/v1/beacon/blocks/%s", bw.config.BeaconAPIURL, beaconRoot)
 
 	resp, err := bw.beaconClient.Get(url)
