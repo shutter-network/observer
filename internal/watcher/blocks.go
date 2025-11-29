@@ -205,20 +205,24 @@ func (bw *BlocksWatcher) processGraffiti(ctx context.Context, header *types.Head
 	beaconRoot := header.ParentBeaconRoot.Hex()
 	//when processing execution block N, the ParentBeaconBlockRoot points to the parent beacon block, so we are actually storing graffiti and proposer info for block N-1
 	url := fmt.Sprintf("%s/eth/v1/beacon/blocks/%s", bw.config.BeaconAPIURL, beaconRoot)
-
-	resp, err := bw.beaconClient.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
 	if err != nil {
-		return fmt.Errorf("failed to fetch beacon block info: %w", err)
+		return err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("beacon block request failed: %s", resp.Status)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get beacon block info: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("beacon block request failed: %s", res.Status)
 	}
 
 	var beaconResp BeaconBlockResponse
 
-	if err := json.NewDecoder(resp.Body).Decode(&beaconResp); err != nil {
+	if err := json.NewDecoder(res.Body).Decode(&beaconResp); err != nil {
 		return fmt.Errorf("failed to decode beacon block JSON: %w", err)
 	}
 
