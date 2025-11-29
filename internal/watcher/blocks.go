@@ -1,8 +1,16 @@
 package watcher
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -21,10 +29,25 @@ type BlocksWatcher struct {
 	txMapper                   metrics.TxMapper
 	transactionSubmittedSyncer *syncer.TransactionSubmittedSyncer
 	validatorRegistrySyncer    *syncer.ValidatorRegistrySyncer
+	beaconClient               *http.Client
 
 	recentBlocksMux sync.Mutex
 	recentBlocks    map[uint64]*types.Header
 	mostRecentBlock uint64
+}
+
+type BeaconBlockResponse struct {
+	Data struct {
+		Message struct {
+			ProposerIndex string `json:"proposer_index"`
+			Body          struct {
+				Graffiti         string `json:"graffiti"`
+				ExecutionPayload struct {
+					BlockNumber string `json:"block_number"`
+				} `json:"execution_payload"`
+			} `json:"body"`
+		} `json:"message"`
+	} `json:"data"`
 }
 
 func NewBlocksWatcher(
@@ -40,6 +63,7 @@ func NewBlocksWatcher(
 		txMapper:                   txMapper,
 		transactionSubmittedSyncer: transactionSubmittedSyncer,
 		validatorRegistrySyncer:    validatorRegistrySyncer,
+		beaconClient:               &http.Client{Timeout: 10 * time.Second},
 		recentBlocksMux:            sync.Mutex{},
 		recentBlocks:               make(map[uint64]*types.Header),
 		mostRecentBlock:            0,
@@ -91,6 +115,14 @@ func (bw *BlocksWatcher) processBlock(ctx context.Context, header *types.Header)
 	if err := bw.validatorRegistrySyncer.Sync(ctx, header); err != nil {
 		return err
 	}
+
+	if err := bw.processGraffiti(ctx, header); err != nil {
+		log.Error().
+			Err(err).
+			Uint64("execution client block_number", header.Number.Uint64()).
+			Msg("failed to process graffiti; skipping")
+	}
+
 	epoch := utils.GetEpochForBlock(header.Time, GenesisTimestamp, SlotDuration, SlotsPerEpoch)
 	if epoch > CurrentEpoch {
 		CurrentEpoch = epoch
@@ -164,4 +196,65 @@ func (bw *BlocksWatcher) getBlockHeaderFromSlot(slot uint64) (*types.Header, boo
 	}
 
 	return nil, false
+}
+
+func (bw *BlocksWatcher) processGraffiti(ctx context.Context, header *types.Header) error {
+	if header.ParentBeaconRoot == nil {
+		return fmt.Errorf("parent beacon root not available")
+	}
+	beaconRoot := header.ParentBeaconRoot.Hex()
+	//when processing execution block N, the ParentBeaconBlockRoot points to the parent beacon block, so we are actually storing graffiti and proposer info for block N-1
+	url := fmt.Sprintf("%s/eth/v1/beacon/blocks/%s", bw.config.BeaconAPIURL, beaconRoot)
+
+	resp, err := bw.beaconClient.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch beacon block info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("beacon block request failed: %s", resp.Status)
+	}
+
+	var beaconResp BeaconBlockResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&beaconResp); err != nil {
+		return fmt.Errorf("failed to decode beacon block JSON: %w", err)
+	}
+
+	validatorIndex, err := strconv.ParseInt(beaconResp.Data.Message.ProposerIndex, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid proposer index: %w", err)
+	}
+
+	graffitiBytes, err := hex.DecodeString(strings.TrimPrefix(beaconResp.Data.Message.Body.Graffiti, "0x"))
+	if err != nil {
+		return fmt.Errorf("failed to decode graffiti hex: %w", err)
+	}
+
+	graffiti := string(bytes.TrimRight(graffitiBytes, "\x00"))
+
+	blockNumber, err := strconv.ParseInt(beaconResp.Data.Message.Body.ExecutionPayload.BlockNumber, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid block number in execution payload: %w", err)
+	}
+
+	upserted, err := bw.txMapper.UpsertGraffitiIfShutterized(ctx, validatorIndex, graffiti, blockNumber)
+	if err != nil {
+		return fmt.Errorf("failed to upsert graffiti: %w", err)
+	}
+
+	if upserted {
+		log.Info().
+			Int64("validator_index", validatorIndex).
+			Str("graffiti", graffiti).
+			Int64("block_number", blockNumber).
+			Msg("stored validator graffiti")
+	} else {
+		log.Debug().
+			Int64("validator_index", validatorIndex).
+			Msg("validator not shutterized; graffiti skipped")
+	}
+
+	return nil
 }

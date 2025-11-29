@@ -190,6 +190,15 @@ type TransactionSubmittedEventsSyncedUntil struct {
 	BlockNumber   int64
 }
 
+type ValidatorGraffiti struct {
+	ID             int64
+	ValidatorIndex pgtype.Int8
+	Graffiti       string
+	BlockNumber    int64
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type ValidatorRegistrationMessage struct {
 	ID                       int64
 	Version                  pgtype.Int8

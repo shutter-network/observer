@@ -611,6 +611,44 @@ func (q *Queries) QueryValidatorStatuses(ctx context.Context, arg QueryValidator
 	return items, nil
 }
 
+const upsertGraffitiIfShutterized = `-- name: UpsertGraffitiIfShutterized :one
+WITH upserted AS (
+    INSERT INTO validator_graffiti (
+        validator_index,
+        graffiti,
+        block_number,
+        created_at,
+        updated_at
+    )
+    SELECT $1, $2, $3, NOW(), NOW()
+    WHERE EXISTS (
+        SELECT 1
+        FROM validator_registration_message
+        WHERE validator_registration_message.validator_index = $1
+    )
+    ON CONFLICT (validator_index)
+    DO UPDATE SET
+        graffiti = $2,
+        block_number = $3,
+        updated_at = NOW()
+    RETURNING 1
+)
+SELECT EXISTS (SELECT 1 FROM upserted) AS did_upsert
+`
+
+type UpsertGraffitiIfShutterizedParams struct {
+	ValidatorIndex pgtype.Int8
+	Graffiti       string
+	BlockNumber    int64
+}
+
+func (q *Queries) UpsertGraffitiIfShutterized(ctx context.Context, arg UpsertGraffitiIfShutterizedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, upsertGraffitiIfShutterized, arg.ValidatorIndex, arg.Graffiti, arg.BlockNumber)
+	var did_upsert bool
+	err := row.Scan(&did_upsert)
+	return did_upsert, err
+}
+
 const upsertTX = `-- name: UpsertTX :exec
 INSERT INTO decrypted_tx (
 	slot, 
