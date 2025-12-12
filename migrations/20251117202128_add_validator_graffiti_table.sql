@@ -2,7 +2,8 @@
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS validator_graffiti
 (
-    validator_index             BIGINT PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
+    validator_index             BIGINT UNIQUE,
     graffiti                    TEXT NOT NULL,
     block_number                BIGINT NOT NULL,
     created_at                  TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,

@@ -210,7 +210,7 @@ func (bw *BlocksWatcher) processGraffiti(ctx context.Context, header *types.Head
 		return err
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := bw.beaconClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to get beacon block info: %w", err)
 	}
