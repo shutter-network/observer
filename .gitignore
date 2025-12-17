@@ -1,4 +1,6 @@
 build
 .envrc
-
+.env
 *.txt
+.Ds_Store
+.gocache

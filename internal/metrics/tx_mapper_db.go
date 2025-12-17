@@ -289,6 +289,38 @@ func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {
 			break
 		}
 
+		// Collect all validator indices from the batch
+		validatorIndices := make([]int64, 0, len(validatorStatus))
+		for _, vs := range validatorStatus {
+			validatorIndex := uint64(vs.ValidatorIndex.Int64)
+			validatorIndices = append(validatorIndices, int64(validatorIndex))
+		}
+
+		// Fetch all validators, splitting into chunks of 64 to respect API limit
+		const maxIndicesPerRequest = 64
+		validatorDataMap := make(map[uint64]*beaconapiclient.ValidatorData)
+
+		for i := 0; i < len(validatorIndices); i += maxIndicesPerRequest {
+			end := i + maxIndicesPerRequest
+			if end > len(validatorIndices) {
+				end = len(validatorIndices)
+			}
+
+			chunk := validatorIndices[i:end]
+			validators, err := tm.beaconAPIClient.GetValidatorByIndices(ctx, "head", chunk)
+			if err != nil {
+				log.Err(err).Msg("failed to get validators from beacon chain for chunk, skipping this chunk")
+				continue
+			}
+
+			if validators != nil {
+				for j := range validators.Data {
+					v := &validators.Data[j]
+					validatorDataMap[uint64(v.Index)] = v
+				}
+			}
+		}
+
 		// Launch goroutines to process each status concurrently
 		for _, vs := range validatorStatus {
 			sem <- struct{}{}
@@ -300,18 +332,15 @@ func (tm *TxMapperDB) UpdateValidatorStatus(ctx context.Context) error {
 				validatorIndex := uint64(vs.ValidatorIndex.Int64)
 				//TODO: should we keep this log or remove it?
 				log.Debug().Uint64("validatorIndex", validatorIndex).Msg("validator status being updated")
-				validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", validatorIndex)
-				if err != nil {
-					log.Err(err).Uint64("validatorIndex", validatorIndex).Msg("failed to get validator from beacon chain")
-					return
-				}
-				if validator == nil {
+				validatorData, ok := validatorDataMap[validatorIndex]
+				if !ok {
+					log.Debug().Uint64("validatorIndex", validatorIndex).Msg("failed to get validator from beacon chain")
 					return
 				}
 
-				err = tm.dbQuery.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
+				err := tm.dbQuery.CreateValidatorStatus(ctx, data.CreateValidatorStatusParams{
 					ValidatorIndex: dbTypes.Uint64ToPgTypeInt8(validatorIndex),
-					Status:         validator.Data.Status,
+					Status:         validatorData.Status,
 				})
 				if err != nil {
 					log.Err(err).Uint64("validatorIndex", validatorIndex).Msg("failed to create validator status")
@@ -574,8 +603,11 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 	staticRegistrationMessageValidity := validateValidatorRegistryMessageContents(regMessage, chainID, validatorRegistryContractAddress)
 
 	var publicKeys []*blst.P1Affine
-	var validators []*beaconapiclient.GetValidatorByIndexResponse
+	var validatorsResponse *beaconapiclient.GetValidatorByIndexResponse
 	validatorIDtoValidity := make(map[int64]*validatorData)
+
+	// collect all validator indices that pass nonce validation
+	validValidatorIndices := make([]int64, 0)
 
 	for _, validatorIndex := range regMessage.ValidatorIndices() {
 		validatorIDtoValidity[validatorIndex] = &validatorData{validatorValidity: staticRegistrationMessageValidity}
@@ -604,23 +636,65 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 			validatorIDtoValidity[validatorIndex].validatorValidity = data.ValidatorRegistrationValidityInvalidmessage
 			continue
 		}
-		validator, err := tm.beaconAPIClient.GetValidatorByIndex(ctx, "head", uint64(validatorIndex))
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get validator %d", validatorIndex)
+		validValidatorIndices = append(validValidatorIndices, int64(validatorIndex))
+	}
+
+	// Fetch all validators, splitting into chunks of 64 to respect API limit
+	if len(validValidatorIndices) > 0 {
+		const maxIndicesPerRequest = 64
+		var allValidatorData []beaconapiclient.ValidatorData
+
+		for i := 0; i < len(validValidatorIndices); i += maxIndicesPerRequest {
+			end := i + maxIndicesPerRequest
+			if end > len(validValidatorIndices) {
+				end = len(validValidatorIndices)
+			}
+
+			chunk := validValidatorIndices[i:end]
+			chunkResponse, err := tm.beaconAPIClient.GetValidatorByIndices(ctx, "head", chunk)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get validators for chunk starting at index %d", i)
+			}
+
+			if chunkResponse != nil && len(chunkResponse.Data) > 0 {
+				allValidatorData = append(allValidatorData, chunkResponse.Data...)
+			}
 		}
-		if validator == nil {
-			// validator not found
-			log.Warn().Msg("registration message for unknown validator")
-			validatorIDtoValidity[validatorIndex].validatorValidity = data.ValidatorRegistrationValidityInvalidmessage
-			continue
+
+		if len(allValidatorData) == 0 {
+			for _, validatorIndex := range validValidatorIndices {
+				validatorIDtoValidity[validatorIndex].validatorValidity = data.ValidatorRegistrationValidityInvalidmessage
+			}
+		} else {
+			// Create a combined response object
+			validatorsResponse = &beaconapiclient.GetValidatorByIndexResponse{
+				Data: allValidatorData,
+			}
+
+			// Create a map from validator index to validator data for quick lookup
+			validatorDataMap := make(map[int64]*beaconapiclient.ValidatorData)
+			for i := range validatorsResponse.Data {
+				v := &validatorsResponse.Data[i]
+				validatorDataMap[int64(v.Index)] = v
+			}
+
+			// Process each validator from the response
+			for _, validatorIndex := range validValidatorIndices {
+				validatorData, ok := validatorDataMap[validatorIndex]
+				if !ok {
+					// validator not found
+					log.Warn().Int64("validatorIndex", validatorIndex).Msg("registration message for unknown validator")
+					validatorIDtoValidity[validatorIndex].validatorValidity = data.ValidatorRegistrationValidityInvalidmessage
+					continue
+				}
+				validatorIDtoValidity[validatorIndex].validatorStatus = validatorData.Status
+				publicKey, err := validatorData.Validator.GetPubkey()
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to get public key of validator %d", validatorIndex)
+				}
+				publicKeys = append(publicKeys, publicKey)
+			}
 		}
-		validatorIDtoValidity[validatorIndex].validatorStatus = validator.Data.Status
-		publicKey, err := validator.Data.Validator.GetPubkey()
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get public key of validator %d", validatorIndex)
-		}
-		publicKeys = append(publicKeys, publicKey)
-		validators = append(validators, validator)
 	}
 	if len(publicKeys) > 0 {
 		// now we need to check for signature verification depending on the message version
@@ -636,13 +710,17 @@ func (tm *TxMapperDB) validateValidatorRegistryEvent(
 				return nil, errors.Wrapf(err, "failed to unmarshal legacy registration message")
 			}
 			if valid := validatorregistry.VerifySignature(sig, publicKeys[0], regMessage); !valid {
-				validatorIDtoValidity[int64(validators[0].Data.Index)].validatorValidity = data.ValidatorRegistrationValidityInvalidsignature
+				if validatorsResponse != nil {
+					validatorIDtoValidity[int64(validatorsResponse.Data[0].Index)].validatorValidity = data.ValidatorRegistrationValidityInvalidsignature
+				}
 				log.Warn().Msg("invalid legacy registration message with invalid signature")
 			}
 		} else {
 			if valid := validatorregistry.VerifyAggregateSignature(sig, publicKeys, regMessage); !valid {
-				for _, validator := range validators {
-					validatorIDtoValidity[int64(validator.Data.Index)].validatorValidity = data.ValidatorRegistrationValidityInvalidsignature
+				if validatorsResponse != nil {
+					for _, validatorData := range validatorsResponse.Data {
+						validatorIDtoValidity[int64(validatorData.Index)].validatorValidity = data.ValidatorRegistrationValidityInvalidsignature
+					}
 				}
 				log.Warn().Msg("invalid aggregate registration message with invalid signature")
 			}
