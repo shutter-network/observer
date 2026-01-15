@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -458,11 +459,15 @@ func (tm *TxMapperDB) processTransactionExecution(
 							return
 						}
 					} else {
+						txStatus := data.TxStatusValInvalid
+						if isFeeTooLowError(err) {
+							txStatus = data.TxStatusValInvalidfeetoolow
+						}
 						err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 							Slot:                        slot,
 							TxIndex:                     txSubEvent.TxIndex,
 							TxHash:                      decryptedTx.Hash().Bytes(),
-							TxStatus:                    data.TxStatusValInvalid,
+							TxStatus:                    txStatus,
 							DecryptionKeyID:             decryptionKeyID,
 							TransactionSubmittedEventID: txSubEvent.ID,
 						})
@@ -746,6 +751,14 @@ func decryptTransaction(key []byte, encrypted []byte) (*types.Transaction, error
 		return nil, errors.Wrapf(err, "Failed to unmarshal decrypted message to transaction type")
 	}
 	return tx, nil
+}
+
+func isFeeTooLowError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "fee too low") ||
+		strings.Contains(strings.ToLower(err.Error()), "transaction underpriced")
 }
 
 // waitForReceiptWithTimeout waits for a transaction receipt with a provided timeout.
