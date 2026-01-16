@@ -127,6 +127,10 @@ func (m *mockTxMapper) AddBlock(ctx context.Context, b *data.Block) error {
 	panic("unexpected call to AddBlock")
 }
 
+func (m *mockTxMapper) AddSlotStatus(ctx context.Context, slot int64, status data.SlotStatusVal) error {
+	panic("unexpected call to AddSlotStatus")
+}
+
 func (m *mockTxMapper) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
 	panic("unexpected call to QueryBlockNumberFromValidatorRegistryEventsSyncedUntil")
 }
