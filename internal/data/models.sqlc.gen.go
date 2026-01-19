@@ -21,6 +21,7 @@ const (
 	TxStatusValPending             TxStatusVal = "pending"
 	TxStatusValShieldedinclusion   TxStatusVal = "shielded inclusion"
 	TxStatusValUnshieldedinclusion TxStatusVal = "unshielded inclusion"
+	TxStatusValInvalidfeetoolow    TxStatusVal = "invalid fee too low"
 )
 
 func (e *TxStatusVal) Scan(src interface{}) error {
@@ -191,7 +192,6 @@ type TransactionSubmittedEventsSyncedUntil struct {
 }
 
 type ValidatorGraffiti struct {
-	ID             int64
 	ValidatorIndex pgtype.Int8
 	Graffiti       string
 	BlockNumber    int64

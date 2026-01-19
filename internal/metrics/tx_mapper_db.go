@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,8 @@ import (
 )
 
 const ReceiptWaitTimeout = 1 * time.Hour
+
+var errSendTransaction = errors.New("send transaction failed")
 
 type TxMapperDB struct {
 	db               *pgxpool.Pool
@@ -117,8 +120,8 @@ func (tm *TxMapperDB) AddDecryptionKeysAndMessages(
 	if err != nil {
 		return err
 	}
-	if len(decryptionKeyIDs) == 0 {
-		log.Debug().Msg("no decryption key was added")
+	if len(decryptionKeyIDs) == 0 || len(decryptionKeyIDs) != len(slots) {
+		log.Debug().Msg("no new decryption key was added")
 		return nil
 	}
 	err = qtx.CreateDecryptionKeyMessages(ctx, data.CreateDecryptionKeyMessagesParams{
@@ -458,18 +461,22 @@ func (tm *TxMapperDB) processTransactionExecution(
 							return
 						}
 					} else {
+						txStatus := data.TxStatusValInvalid
+						if isFeeTooLowError(err) {
+							txStatus = data.TxStatusValInvalidfeetoolow
+						}
 						err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 							Slot:                        slot,
 							TxIndex:                     txSubEvent.TxIndex,
 							TxHash:                      decryptedTx.Hash().Bytes(),
-							TxStatus:                    data.TxStatusValInvalid,
+							TxStatus:                    txStatus,
 							DecryptionKeyID:             decryptionKeyID,
 							TransactionSubmittedEventID: txSubEvent.ID,
 						})
 						if err != nil {
 							log.Err(err).Msg("failed to create decrypted tx")
 						}
-						txErrorSignalCh <- fmt.Errorf("failed to send transaction: %w", err)
+						txErrorSignalCh <- fmt.Errorf("%w: %v", errSendTransaction, err)
 						return
 					}
 				} else {
@@ -498,6 +505,9 @@ func (tm *TxMapperDB) processTransactionExecution(
 			receipt, err := tm.waitForReceiptWithTimeout(ctx, txHash, ReceiptWaitTimeout, txErrorSignalCh)
 			if err != nil {
 				log.Err(err).Msg("")
+				if errors.Is(err, errSendTransaction) {
+					return
+				}
 				// update/create status to not included
 				err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
 					Slot:                        slot,
@@ -746,6 +756,15 @@ func decryptTransaction(key []byte, encrypted []byte) (*types.Transaction, error
 		return nil, errors.Wrapf(err, "Failed to unmarshal decrypted message to transaction type")
 	}
 	return tx, nil
+}
+
+func isFeeTooLowError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "feetoolow") ||
+		strings.Contains(strings.ToLower(err.Error()), "underpriced") ||
+		strings.Contains(strings.ToLower(err.Error()), "maxfeepergaslessthanblockbasefee")
 }
 
 // waitForReceiptWithTimeout waits for a transaction receipt with a provided timeout.
