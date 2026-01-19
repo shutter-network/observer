@@ -208,3 +208,14 @@ WITH upserted AS (
 )
 SELECT EXISTS (SELECT 1 FROM upserted) AS did_upsert;
 
+-- name: CreateSlotStatus :exec
+INSERT INTO slot_status (
+	slot,
+	status
+)
+VALUES ($1, $2);
+
+-- name: QueryLatestSlotStatus :one
+SELECT slot, status FROM slot_status
+ORDER BY slot DESC
+LIMIT 1;

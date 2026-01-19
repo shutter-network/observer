@@ -11,6 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type SlotStatusVal string
+
+const (
+	SlotStatusValProposed SlotStatusVal = "proposed"
+	SlotStatusValMissed   SlotStatusVal = "missed"
+)
+
+func (e *SlotStatusVal) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SlotStatusVal(s)
+	case string:
+		*e = SlotStatusVal(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SlotStatusVal: %T", src)
+	}
+	return nil
+}
+
+type NullSlotStatusVal struct {
+	SlotStatusVal SlotStatusVal
+	Valid         bool // Valid is true if SlotStatusVal is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSlotStatusVal) Scan(value interface{}) error {
+	if value == nil {
+		ns.SlotStatusVal, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SlotStatusVal.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSlotStatusVal) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SlotStatusVal), nil
+}
+
 type TxStatusVal string
 
 const (
@@ -167,6 +209,12 @@ type ProposerDuty struct {
 	Slot           int64
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+}
+
+type SlotStatus struct {
+	Slot      int64
+	Status    SlotStatusVal
+	CreatedAt pgtype.Timestamptz
 }
 
 type TransactionSubmittedEvent struct {

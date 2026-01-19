@@ -209,6 +209,42 @@ func (tm *TxMapperDB) AddBlock(
 	return err
 }
 
+func (tm *TxMapperDB) AddSlotStatus(
+	ctx context.Context,
+	slot int64,
+	status data.SlotStatusVal,
+) error {
+	latest, err := tm.dbQuery.QueryLatestSlotStatus(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return tm.dbQuery.CreateSlotStatus(ctx, data.CreateSlotStatusParams{
+				Slot:   slot,
+				Status: status,
+			})
+		}
+		return err
+	}
+
+	if slot <= latest.Slot {
+		return nil
+	}
+
+	for s := latest.Slot + 1; s < slot; s++ {
+		err := tm.dbQuery.CreateSlotStatus(ctx, data.CreateSlotStatusParams{
+			Slot:   s,
+			Status: data.SlotStatusValMissed,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return tm.dbQuery.CreateSlotStatus(ctx, data.CreateSlotStatusParams{
+		Slot:   slot,
+		Status: status,
+	})
+}
+
 func (tm *TxMapperDB) QueryBlockNumberFromValidatorRegistryEventsSyncedUntil(ctx context.Context) (int64, error) {
 	data, err := tm.dbQuery.QueryValidatorRegistryEventsSyncedUntil(ctx)
 	if err != nil {

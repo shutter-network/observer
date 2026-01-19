@@ -222,6 +222,24 @@ func (q *Queries) CreateProposerDuties(ctx context.Context, arg CreateProposerDu
 	return err
 }
 
+const createSlotStatus = `-- name: CreateSlotStatus :exec
+INSERT INTO slot_status (
+	slot,
+	status
+)
+VALUES ($1, $2)
+`
+
+type CreateSlotStatusParams struct {
+	Slot   int64
+	Status SlotStatusVal
+}
+
+func (q *Queries) CreateSlotStatus(ctx context.Context, arg CreateSlotStatusParams) error {
+	_, err := q.db.Exec(ctx, createSlotStatus, arg.Slot, arg.Status)
+	return err
+}
+
 const createTransactionSubmittedEvent = `-- name: CreateTransactionSubmittedEvent :exec
 INSERT into transaction_submitted_event (
     event_block_hash, 
@@ -474,6 +492,24 @@ func (q *Queries) QueryDecryptionKeysAndMessage(ctx context.Context, slot int64)
 		return nil, err
 	}
 	return items, nil
+}
+
+const queryLatestSlotStatus = `-- name: QueryLatestSlotStatus :one
+SELECT slot, status FROM slot_status
+ORDER BY slot DESC
+LIMIT 1
+`
+
+type QueryLatestSlotStatusRow struct {
+	Slot   int64
+	Status SlotStatusVal
+}
+
+func (q *Queries) QueryLatestSlotStatus(ctx context.Context) (QueryLatestSlotStatusRow, error) {
+	row := q.db.QueryRow(ctx, queryLatestSlotStatus)
+	var i QueryLatestSlotStatusRow
+	err := row.Scan(&i.Slot, &i.Status)
+	return i, err
 }
 
 const queryTransactionSubmittedEvent = `-- name: QueryTransactionSubmittedEvent :many

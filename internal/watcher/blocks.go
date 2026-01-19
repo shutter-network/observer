@@ -147,16 +147,25 @@ func (bw *BlocksWatcher) insertBlock(ctx context.Context, header *types.Header) 
 		bw.mostRecentBlock = header.Number.Uint64()
 	}
 
+	slot := int64(utils.GetSlotForBlock(header.Time, GenesisTimestamp, SlotDuration))
+
 	err := bw.txMapper.AddBlock(ctx, &data.Block{
 		BlockHash:      header.Hash().Bytes(),
 		BlockNumber:    header.Number.Int64(),
 		BlockTimestamp: int64(header.Time),
-		Slot:           int64(utils.GetSlotForBlock(header.Time, GenesisTimestamp, SlotDuration)),
+		Slot:           slot,
 	})
 	if err != nil {
 		log.Err(err).Msg("err adding block")
+		return err
 	}
-	return err
+
+	err = bw.txMapper.AddSlotStatus(ctx, slot, data.SlotStatusValProposed)
+	if err != nil {
+		log.Err(err).Msg("err adding slot status")
+		return err
+	}
+	return nil
 }
 
 func (bw *BlocksWatcher) clearOldBlocks(latestHeader *types.Header) {
