@@ -137,11 +137,13 @@ func mockBeaconClient(t *testing.T, pubKeyHex string, status string) string {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x := beaconapiclient.GetValidatorByIndexResponse{
 			Finalized: true,
-			Data: beaconapiclient.ValidatorData{
-				Validator: beaconapiclient.Validator{
-					PubkeyHex: pubKeyHex,
+			Data: []beaconapiclient.ValidatorData{
+				{
+					Validator: beaconapiclient.Validator{
+						PubkeyHex: pubKeyHex,
+					},
+					Status: status,
 				},
-				Status: status,
 			},
 		}
 		res, err := json.Marshal(x)
