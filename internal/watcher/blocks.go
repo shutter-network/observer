@@ -106,6 +106,18 @@ func (bw *BlocksWatcher) processBlock(ctx context.Context, header *types.Header)
 	if err != nil {
 		return err
 	}
+
+	// classify decrypted txs included in this block as early as possible
+	block, err := bw.ethClient.BlockByHash(ctx, header.Hash())
+	if err == nil {
+		slot := utils.GetSlotForBlock(header.Time, GenesisTimestamp, SlotDuration)
+		if err := bw.txMapper.HandleBlock(ctx, block.Number().Int64(), int64(slot), block.Transactions()); err != nil {
+			log.Err(err).Msg("tx mapper handle block failed")
+		}
+	} else {
+		log.Err(err).Uint64("block", header.Number.Uint64()).Msg("failed to fetch block body for classification")
+	}
+
 	bw.clearOldBlocks(header)
 
 	if err := bw.transactionSubmittedSyncer.Sync(ctx, header); err != nil {

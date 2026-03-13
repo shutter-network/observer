@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v5"
 	sequencerBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/sequencer"
 	validatorRegistryBindings "github.com/shutter-network/gnosh-contracts/gnoshcontracts/validatorregistry"
@@ -66,4 +67,5 @@ type TxMapper interface {
 	UpdateValidatorStatus(ctx context.Context) error
 	AddProposerDuties(ctx context.Context, epoch uint64) error
 	UpsertGraffitiIfShutterized(ctx context.Context, validatorIndex int64, graffiti string, blockNumber int64) (bool, error)
+	HandleBlock(ctx context.Context, blockNumber int64, slot int64, txs types.Transactions) error
 }

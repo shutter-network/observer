@@ -43,6 +43,19 @@ type TxMapperDB struct {
 	chainID          int64
 	genesisTimestamp uint64
 	slotDuration     uint64
+	statusDone       sync.Map
+}
+
+// markDone records that a tx hash has been finalized (by block or receipt)
+// to prevent double classification.
+func (tm *TxMapperDB) markDone(hash common.Hash) {
+	tm.statusDone.Store(hash.Hex(), struct{}{})
+}
+
+// isDone reports whether a tx hash was already finalized.
+func (tm *TxMapperDB) isDone(hash common.Hash) bool {
+	_, ok := tm.statusDone.Load(hash.Hex())
+	return ok
 }
 
 type validatorData struct {
@@ -386,6 +399,133 @@ func classifyInclusion(expectedIndex int, receiptIndex uint) (data.TxStatusVal, 
 	}
 }
 
+type batchEntry struct {
+	hash             common.Hash
+	status           data.TxStatusVal
+	txIndex          int64
+	decryptionKeyID  int64
+	submittedEventID int64
+}
+
+func classifyWithPredecessors(expectedPos, blockPos int, entries []batchEntry) (data.TxStatusVal,
+	string) {
+	// later index always unshielded
+	if blockPos > expectedPos {
+		return data.TxStatusValUnshieldedinclusion, InclPosLater
+	}
+
+	pos := InclPosExact
+	if blockPos < expectedPos {
+		pos = InclPosEarlier
+	}
+
+	badPredecessor := false
+	allShieldedBefore := true
+	seenTentative := false
+	for i := 0; i < expectedPos; i++ {
+		switch entries[i].status {
+		case data.TxStatusValShieldedinclusion:
+			// ok
+		case data.TxStatusValTentativeshieldedinclusion:
+			allShieldedBefore = false
+			seenTentative = true
+		case data.TxStatusValUnshieldedinclusion:
+			badPredecessor = true
+		default:
+			allShieldedBefore = false
+		}
+		if badPredecessor {
+			break
+		}
+	}
+
+	if badPredecessor {
+		return data.TxStatusValUnshieldedinclusion, pos
+	}
+	if pos == InclPosExact && allShieldedBefore {
+		return data.TxStatusValShieldedinclusion, pos
+	}
+	// exact with tentative predecessor, or earlier with good predecessors -> ambiguous (tentative)
+	_ = seenTentative // kept for readability; not used in decision
+	return data.TxStatusValTentativeshieldedinclusion, pos
+}
+
+// HandleBlock performs predecessor-aware classification at block arrival.
+// Receipt-based classification is a fallback and skips if a tx is already finalized.
+func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot int64, txs types.Transactions) error {
+	if len(txs) == 0 {
+		return nil
+	}
+
+	rows, err := tm.db.Query(ctx, `
+		SELECT tx_hash, tx_index, tx_status, decryption_key_id, transaction_submitted_event_id
+		FROM decrypted_tx
+		WHERE slot = $1
+		  AND tx_hash <> '\x00'
+		ORDER BY tx_index`, slot)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var entries []batchEntry
+	indexByHash := make(map[string]int)
+
+	for rows.Next() {
+		var (
+			hashBytes []byte
+			txIdx     int64
+			status    data.TxStatusVal
+			decID     int64
+			subID     int64
+		)
+		if err := rows.Scan(&hashBytes, &txIdx, &status, &decID, &subID); err != nil {
+			return err
+		}
+		h := common.BytesToHash(hashBytes)
+		indexByHash[h.Hex()] = len(entries)
+		entries = append(entries, batchEntry{
+			hash:             h,
+			status:           status,
+			txIndex:          txIdx,
+			decryptionKeyID:  decID,
+			submittedEventID: subID,
+		})
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	for blockPos, tx := range txs {
+		h := tx.Hash()
+		expectedPos, ok := indexByHash[h.Hex()]
+		if !ok || tm.isDone(h) {
+			continue
+		}
+
+		status, pos := classifyWithPredecessors(expectedPos, blockPos, entries)
+		entries[expectedPos].status = status // update for later predecessor checks
+
+		if err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+			Slot:                        slot,
+			TxIndex:                     entries[expectedPos].txIndex,
+			TxHash:                      h.Bytes(),
+			TxStatus:                    status,
+			InclusionPosition:           pos,
+			DecryptionKeyID:             entries[expectedPos].decryptionKeyID,
+			TransactionSubmittedEventID: entries[expectedPos].submittedEventID,
+			BlockNumber:                 pgtype.Int8{Int64: blockNumber, Valid: true},
+		}); err != nil {
+			log.Err(err).Hex("tx-hash", h.Bytes()).Msg("failed to upsert tx from block body")
+			continue
+		}
+		tm.markDone(h)
+	}
+
+	return nil
+}
+
 func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,
@@ -416,9 +556,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 	}
 
 	slot := te.DecKeysAndMessages[0].Slot
+	expectedIdx := 0
 
 	var wg sync.WaitGroup
-	for index, txSubEvent := range txSubEvents {
+	for _, txSubEvent := range txSubEvents {
 		decryptionKeyID, err := getDecryptionKeyID(txSubEvent, identityPreimageToDecKeyAndMsg)
 		if err != nil {
 			log.Err(err).Msg("error while trying to retrieve decryption key ID")
@@ -449,6 +590,9 @@ func (tm *TxMapperDB) processTransactionExecution(
 			Uint64("max-fee-per-gas", decryptedTx.GasFeeCap().Uint64()).
 			Uint8("tx-type", decryptedTx.Type()).
 			Msg("tx-data")
+
+		currExpected := expectedIdx
+		expectedIdx++
 
 		// channel to propagate errors between goroutines
 		txErrorSignalCh := make(chan error, 1)
@@ -521,8 +665,13 @@ func (tm *TxMapperDB) processTransactionExecution(
 		}(ctx, tm.config.InclusionDelay, decryptedTx, txSubEvent, slot, decryptionKeyID, txErrorSignalCh)
 
 		// Second goroutine: Wait for receipt
-		go func(ctx context.Context, index int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, txSubEventID int64, txErrorSignalCh chan error) {
+		go func(ctx context.Context, expectedIndex int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, txSubEventID int64, txErrorSignalCh chan error) {
 			defer wg.Done()
+
+			// Fallback path: skip if block-time classification already finalized this tx.
+			if tm.isDone(txHash) {
+				return
+			}
 
 			// Wait for the receipt with a timeout
 			receipt, err := tm.waitForReceiptWithTimeout(ctx, txHash, ReceiptWaitTimeout, txErrorSignalCh)
@@ -531,18 +680,21 @@ func (tm *TxMapperDB) processTransactionExecution(
 				if errors.Is(err, errSendTransaction) {
 					return
 				}
-				// update/create status to not included
-				err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
-					Slot:                        slot,
-					TxIndex:                     txIndex,
-					TxHash:                      txHash[:],
-					TxStatus:                    data.TxStatusValNotincluded,
-					InclusionPosition:           InclPosUnknown,
-					DecryptionKeyID:             decryptionKeyID,
-					TransactionSubmittedEventID: txSubEventID,
-				})
-				if err != nil {
-					log.Err(err).Msg("failed to upsert decrypted tx")
+				if !tm.isDone(txHash) { // guard against concurrent HandleBlock
+					err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+						Slot:                        slot,
+						TxIndex:                     txIndex,
+						TxHash:                      txHash[:],
+						TxStatus:                    data.TxStatusValNotincluded,
+						InclusionPosition:           InclPosUnknown,
+						DecryptionKeyID:             decryptionKeyID,
+						TransactionSubmittedEventID: txSubEventID,
+						BlockNumber:                 pgtype.Int8{},
+					})
+					if err != nil {
+						log.Err(err).Msg("failed to upsert decrypted tx")
+					}
+					// tm.markDone(txHash)
 				}
 				return
 			}
@@ -564,13 +716,13 @@ func (tm *TxMapperDB) processTransactionExecution(
 				txStatus = data.TxStatusValUnshieldedinclusion
 				inclusionPosition = InclPosWrong
 			} else {
-				txStatus, inclusionPosition = classifyInclusion(index, receipt.TransactionIndex)
+				txStatus, inclusionPosition = classifyInclusion(expectedIndex, receipt.TransactionIndex)
 			}
 
 			log.Info().
 				Int64("expected-slot", slot).
 				Uint64("receipt-slot", inclusionSlot).
-				Uint("expected-index", uint(index)).
+				Uint("expected-index", uint(expectedIndex)).
 				Uint("receipt-index", receipt.TransactionIndex).
 				Hex("tx-hash", receipt.TxHash.Bytes()).
 				Str("inclusion_position", inclusionPosition).
@@ -590,7 +742,8 @@ func (tm *TxMapperDB) processTransactionExecution(
 			if err != nil {
 				log.Err(err).Msg("failed to update decrypted tx")
 			}
-		}(ctx, index, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txSubEvent.ID, txErrorSignalCh)
+		}(ctx, currExpected, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txSubEvent.ID,
+			txErrorSignalCh)
 	}
 
 	// Wait for all routines to end
