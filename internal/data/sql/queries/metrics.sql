@@ -82,16 +82,15 @@ SELECT * FROM block
 WHERE slot = $1 FOR UPDATE;
 
 -- name: CreateDecryptedTX :exec
-INSERT into decrypted_tx(
-	slot,
-	tx_index,
-	tx_hash,
-	tx_status,
-	decryption_key_id,
-	transaction_submitted_event_id
-) 
-VALUES ($1, $2, $3, $4, $5, $6) 
-ON CONFLICT DO NOTHING;
+INSERT INTO decrypted_tx (
+    slot,
+    tx_index,
+    tx_hash,
+    tx_status,
+    inclusion_position,
+    decryption_key_id,
+    transaction_submitted_event_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: CreateValidatorRegistryMessage :exec
 INSERT into validator_registration_message(
@@ -161,20 +160,22 @@ ON CONFLICT DO NOTHING;
 
 -- name: UpsertTX :exec
 INSERT INTO decrypted_tx (
-	slot, 
-	tx_index, 
-	tx_hash, 
-	tx_status, 
-	decryption_key_id, 
-	transaction_submitted_event_id, 
-	block_number
+    slot,
+    tx_index,
+    tx_hash,
+    tx_status,
+    inclusion_position,
+    decryption_key_id,
+    transaction_submitted_event_id,
+    block_number
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (slot, tx_index) 
-DO UPDATE
-SET tx_status = $4,
-    block_number = $7,
-    updated_at = NOW();
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT (slot, tx_index)
+  DO UPDATE
+             SET tx_status = $4,
+             inclusion_position = $5,
+             block_number = $8,
+             updated_at = NOW();
 
 -- name: CreateTransactionSubmittedEventsSyncedUntil :exec
 INSERT INTO transaction_submitted_events_synced_until (block_hash, block_number) VALUES ($1, $2)
@@ -207,4 +208,3 @@ WITH upserted AS (
     RETURNING 1
 )
 SELECT EXISTS (SELECT 1 FROM upserted) AS did_upsert;
-

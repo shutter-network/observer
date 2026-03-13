@@ -367,6 +367,25 @@ func (tm *TxMapperDB) AddProposerDuties(ctx context.Context, epoch uint64) error
 	return err
 }
 
+const (
+	InclPosUnknown = "unknown"
+	InclPosExact   = "exact"
+	InclPosLater   = "later"
+	InclPosEarlier = "earlier"
+	InclPosWrong   = "wrong_slot"
+)
+
+func classifyInclusion(expectedIndex int, receiptIndex uint) (data.TxStatusVal, string) {
+	switch {
+	case receiptIndex == uint(expectedIndex):
+		return data.TxStatusValShieldedinclusion, InclPosExact
+	case receiptIndex > uint(expectedIndex):
+		return data.TxStatusValUnshieldedinclusion, InclPosLater
+	default:
+		return data.TxStatusValTentativeshieldedinclusion, InclPosEarlier
+	}
+}
+
 func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,
@@ -413,6 +432,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 				TxIndex:                     txSubEvent.TxIndex,
 				TxHash:                      common.Hash{}.Bytes(),
 				TxStatus:                    data.TxStatusValNotdecrypted,
+				InclusionPosition:           InclPosUnknown,
 				DecryptionKeyID:             decryptionKeyID,
 				TransactionSubmittedEventID: txSubEvent.ID,
 			})
@@ -453,6 +473,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 							TxIndex:                     txSubEvent.TxIndex,
 							TxHash:                      decryptedTx.Hash().Bytes(),
 							TxStatus:                    data.TxStatusValPending,
+							InclusionPosition:           InclPosUnknown,
 							DecryptionKeyID:             decryptionKeyID,
 							TransactionSubmittedEventID: txSubEvent.ID,
 						})
@@ -470,6 +491,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 							TxIndex:                     txSubEvent.TxIndex,
 							TxHash:                      decryptedTx.Hash().Bytes(),
 							TxStatus:                    txStatus,
+							InclusionPosition:           InclPosUnknown,
 							DecryptionKeyID:             decryptionKeyID,
 							TransactionSubmittedEventID: txSubEvent.ID,
 						})
@@ -486,6 +508,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 						TxIndex:                     txSubEvent.TxIndex,
 						TxHash:                      decryptedTx.Hash().Bytes(),
 						TxStatus:                    data.TxStatusValPending,
+						InclusionPosition:           InclPosUnknown,
 						DecryptionKeyID:             decryptionKeyID,
 						TransactionSubmittedEventID: txSubEvent.ID,
 					})
@@ -514,6 +537,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 					TxIndex:                     txIndex,
 					TxHash:                      txHash[:],
 					TxStatus:                    data.TxStatusValNotincluded,
+					InclusionPosition:           InclPosUnknown,
 					DecryptionKeyID:             decryptionKeyID,
 					TransactionSubmittedEventID: txSubEventID,
 				})
@@ -535,30 +559,30 @@ func (tm *TxMapperDB) processTransactionExecution(
 			}
 
 			inclusionSlot := utils.GetSlotForBlock(block.Header().Time, tm.genesisTimestamp, tm.slotDuration)
-			txStatus := data.TxStatusValShieldedinclusion
-
-			log.Info().Uint("tx-index", receipt.TransactionIndex).
-				Uint64("inclusion-slot", inclusionSlot).
-				Msg("receipt data")
-
-			log.Info().Int("index", index).
-				Int64("inclusion-slot", slot).
-				Msg("local data")
-
-			if receipt.TransactionIndex != uint(index) {
-				log.Info().Uint("tx-index", receipt.TransactionIndex).Msg("transaction index mismatch")
-				txStatus = data.TxStatusValUnshieldedinclusion
-			}
+			txStatus, inclusionPosition := data.TxStatusValShieldedinclusion, InclPosUnknown
 			if inclusionSlot != uint64(slot) {
-				log.Info().Int64("slot", slot).Msg("transaction slot mismatch")
 				txStatus = data.TxStatusValUnshieldedinclusion
+				inclusionPosition = InclPosWrong
+			} else {
+				txStatus, inclusionPosition = classifyInclusion(index, receipt.TransactionIndex)
 			}
+
+			log.Info().
+				Int64("expected-slot", slot).
+				Uint64("receipt-slot", inclusionSlot).
+				Uint("expected-index", uint(index)).
+				Uint("receipt-index", receipt.TransactionIndex).
+				Hex("tx-hash", receipt.TxHash.Bytes()).
+				Str("inclusion_position", inclusionPosition).
+				Str("tx_status", string(txStatus)).
+				Msg("transaction receipt classified")
 
 			err = tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
 				Slot:                        slot,
 				TxIndex:                     txIndex,
 				TxHash:                      receipt.TxHash.Bytes(),
 				TxStatus:                    txStatus,
+				InclusionPosition:           inclusionPosition,
 				DecryptionKeyID:             decryptionKeyID,
 				TransactionSubmittedEventID: txSubEventID,
 				BlockNumber:                 pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
