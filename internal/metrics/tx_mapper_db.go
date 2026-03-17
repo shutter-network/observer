@@ -457,6 +457,12 @@ func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot i
 		return nil
 	}
 
+	log.Debug().
+		Int64("slot", slot).
+		Int64("block_number", blockNumber).
+		Int("num_txs", len(txs)).
+		Msg("handling block for tx classification")
+
 	rows, err := tm.db.Query(ctx, `
 		SELECT tx_hash, tx_index, tx_status, decryption_key_id, transaction_submitted_event_id
 		FROM decrypted_tx
@@ -493,6 +499,11 @@ func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot i
 		})
 	}
 
+	log.Debug().
+		Int64("slot", slot).
+		Int("num_candidates", len(entries)).
+		Msg("loaded decrypted tx candidates for block classification")
+
 	if len(entries) == 0 {
 		return nil
 	}
@@ -506,6 +517,17 @@ func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot i
 
 		status, pos := classifyWithPredecessors(expectedPos, blockPos, entries)
 		entries[expectedPos].status = status // update for later predecessor checks
+
+		log.Debug().
+			Int64("slot", slot).
+			Int64("block_number", blockNumber).
+			Int("block_pos", blockPos).
+			Int("expected_pos", expectedPos).
+			Int64("tx_index", entries[expectedPos].txIndex).
+			Hex("tx_hash", h.Bytes()).
+			Str("tx_status", string(status)).
+			Str("inclusion_position", pos).
+			Msg("classified tx from block body")
 
 		if err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
 			Slot:                        slot,
