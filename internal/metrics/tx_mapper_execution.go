@@ -64,61 +64,67 @@ func (tm *TxMapperDB) processTransactionExecution(
 	expectedIdx := 0
 	jobs := make([]txExecutionJob, 0, len(txSubEvents))
 
-	// First pass: decrypt and create initial decrypted_tx rows synchronously.
-	for _, txSubEvent := range txSubEvents {
-		decryptionKeyID, err := getDecryptionKeyID(txSubEvent, identityPreimageToDecKeyAndMsg)
-		if err != nil {
-			log.Err(err).Msg("error while trying to retrieve decryption key ID")
-			continue
-		}
+	err = tm.withSlotLock(slot, func() error {
+		for _, txSubEvent := range txSubEvents {
+			decryptionKeyID, err := getDecryptionKeyID(txSubEvent, identityPreimageToDecKeyAndMsg)
+			if err != nil {
+				log.Err(err).Msg("error while trying to retrieve decryption key ID")
+				continue
+			}
 
-		decryptedTx, err := getDecryptedTX(txSubEvent, identityPreimageToDecKeyAndMsg)
-		if err != nil {
-			log.Err(err).Msg("error while trying to get decrypted tx hash")
-			err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+			decryptedTx, err := getDecryptedTX(txSubEvent, identityPreimageToDecKeyAndMsg)
+			if err != nil {
+				log.Err(err).Msg("error while trying to get decrypted tx hash")
+				err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+					Slot:                        slot,
+					TxIndex:                     txSubEvent.TxIndex,
+					TxHash:                      common.Hash{}.Bytes(),
+					TxStatus:                    data.TxStatusValNotdecrypted,
+					InclusionPosition:           InclPosUnknown,
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEvent.ID,
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to create decrypted tx")
+				}
+				continue
+			}
+
+			log.Info().Uint64("gas", decryptedTx.Gas()).
+				Uint64("gas-price", decryptedTx.GasPrice().Uint64()).
+				Uint64("cost", decryptedTx.Cost().Uint64()).
+				Uint64("max-priority-fee-per-gas", decryptedTx.GasTipCap().Uint64()).
+				Uint64("max-fee-per-gas", decryptedTx.GasFeeCap().Uint64()).
+				Uint8("tx-type", decryptedTx.Type()).
+				Msg("tx-data")
+
+			err = tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
 				Slot:                        slot,
 				TxIndex:                     txSubEvent.TxIndex,
-				TxHash:                      common.Hash{}.Bytes(),
-				TxStatus:                    data.TxStatusValNotdecrypted,
+				TxHash:                      decryptedTx.Hash().Bytes(),
+				TxStatus:                    data.TxStatusValPending,
 				InclusionPosition:           InclPosUnknown,
 				DecryptionKeyID:             decryptionKeyID,
 				TransactionSubmittedEventID: txSubEvent.ID,
 			})
 			if err != nil {
 				log.Err(err).Msg("failed to create decrypted tx")
+				continue
 			}
-			continue
+
+			jobs = append(jobs, txExecutionJob{
+				expectedIndex:   expectedIdx,
+				decryptedTx:     decryptedTx,
+				txSubEvent:      txSubEvent,
+				decryptionKeyID: decryptionKeyID,
+			})
+			expectedIdx++
 		}
 
-		log.Info().Uint64("gas", decryptedTx.Gas()).
-			Uint64("gas-price", decryptedTx.GasPrice().Uint64()).
-			Uint64("cost", decryptedTx.Cost().Uint64()).
-			Uint64("max-priority-fee-per-gas", decryptedTx.GasTipCap().Uint64()).
-			Uint64("max-fee-per-gas", decryptedTx.GasFeeCap().Uint64()).
-			Uint8("tx-type", decryptedTx.Type()).
-			Msg("tx-data")
-
-		err = tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-			Slot:                        slot,
-			TxIndex:                     txSubEvent.TxIndex,
-			TxHash:                      decryptedTx.Hash().Bytes(),
-			TxStatus:                    data.TxStatusValPending,
-			InclusionPosition:           InclPosUnknown,
-			DecryptionKeyID:             decryptionKeyID,
-			TransactionSubmittedEventID: txSubEvent.ID,
-		})
-		if err != nil {
-			log.Err(err).Msg("failed to create decrypted tx")
-			continue
-		}
-
-		jobs = append(jobs, txExecutionJob{
-			expectedIndex:   expectedIdx,
-			decryptedTx:     decryptedTx,
-			txSubEvent:      txSubEvent,
-			decryptionKeyID: decryptionKeyID,
-		})
-		expectedIdx++
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	// If the block already exists for this slot, classify now that rows are present.
@@ -157,7 +163,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 					if isFeeTooLowError(err) {
 						txStatus = data.TxStatusValInvalidfeetoolow
 					}
-					err := tm.withTxLock(decryptedTx.Hash(), func() error {
+					err := tm.withSlotLock(slot, func() error {
 						if tm.isDone(decryptedTx.Hash()) {
 							return nil
 						}
@@ -196,11 +202,13 @@ func (tm *TxMapperDB) processTransactionExecution(
 				if errors.Is(err, context.Canceled) {
 					return
 				}
-				log.Err(err).Msg("")
 				if errors.Is(err, errSendTransaction) {
+					log.Debug().Hex("tx-hash", txHash.Bytes()).Err(err).Msg("receipt wait stopped after send failure")
 					return
 				}
-				err := tm.withTxLock(txHash, func() error {
+
+				log.Err(err).Hex("tx-hash", txHash.Bytes()).Msg("receipt wait failed")
+				err := tm.withSlotLock(slot, func() error {
 					if tm.isDone(txHash) {
 						return nil
 					}
@@ -261,7 +269,7 @@ func (tm *TxMapperDB) processTransactionExecution(
 				Str("tx_status", string(txStatus)).
 				Msg("transaction receipt classified")
 
-			err = tm.withTxLock(txHash, func() error {
+			err = tm.withSlotLock(slot, func() error {
 				if tm.isDone(txHash) {
 					return nil
 				}

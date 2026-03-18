@@ -42,16 +42,16 @@ type TxMapperDB struct {
 	genesisTimestamp uint64
 	slotDuration     uint64
 	statusDone       sync.Map
-	txLocks          sync.Map
+	slotLocks        sync.Map
 }
 
-func (tm *TxMapperDB) txLock(hash common.Hash) *sync.Mutex {
-	v, _ := tm.txLocks.LoadOrStore(hash.Hex(), &sync.Mutex{})
+func (tm *TxMapperDB) slotLock(slot int64) *sync.Mutex {
+	v, _ := tm.slotLocks.LoadOrStore(slot, &sync.Mutex{})
 	return v.(*sync.Mutex)
 }
 
-func (tm *TxMapperDB) withTxLock(hash common.Hash, fn func() error) error {
-	mu := tm.txLock(hash)
+func (tm *TxMapperDB) withSlotLock(slot int64, fn func() error) error {
+	mu := tm.slotLock(slot)
 	mu.Lock()
 	defer mu.Unlock()
 	return fn()
@@ -86,13 +86,13 @@ type TxMapper interface {
 	ValidatorStore
 }
 
-// markDone records that a tx hash has been finalized (by block or receipt)
-// to prevent double classification.
+// markDone records that an inclusion classification was observed for this tx hash.
+// Failure and timeout paths should not overwrite rows once a tx is done.
 func (tm *TxMapperDB) markDone(hash common.Hash) {
 	tm.statusDone.Store(hash.Hex(), struct{}{})
 }
 
-// isDone reports whether a tx hash was already finalized.
+// isDone reports whether an inclusion classification was already observed.
 func (tm *TxMapperDB) isDone(hash common.Hash) bool {
 	_, ok := tm.statusDone.Load(hash.Hex())
 	return ok

@@ -97,61 +97,61 @@ func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot i
 		Int("num_txs", len(txs)).
 		Msg("handling block for tx classification")
 
-	rows, err := tm.db.Query(ctx, `
-		SELECT tx_hash, tx_index, tx_status, decryption_key_id, transaction_submitted_event_id
-		FROM decrypted_tx
-		WHERE slot = $1
-		  AND tx_hash <> '\x00'
-		ORDER BY tx_index`, slot)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	var entries []batchEntry
-	indexByHash := make(map[string]int)
-
-	for rows.Next() {
-		var (
-			hashBytes []byte
-			txIdx     int64
-			status    data.TxStatusVal
-			decID     int64
-			subID     int64
-		)
-		if err := rows.Scan(&hashBytes, &txIdx, &status, &decID, &subID); err != nil {
+	return tm.withSlotLock(slot, func() error {
+		rows, err := tm.db.Query(ctx, `
+			SELECT tx_hash, tx_index, tx_status, decryption_key_id, transaction_submitted_event_id
+			FROM decrypted_tx
+			WHERE slot = $1
+			  AND tx_hash <> '\x00'
+			ORDER BY tx_index`, slot)
+		if err != nil {
 			return err
 		}
-		h := common.BytesToHash(hashBytes)
-		indexByHash[h.Hex()] = len(entries)
-		entries = append(entries, batchEntry{
-			hash:             h,
-			status:           status,
-			txIndex:          txIdx,
-			decryptionKeyID:  decID,
-			submittedEventID: subID,
-		})
-	}
+		defer rows.Close()
 
-	log.Debug().
-		Int64("slot", slot).
-		Int("num_candidates", len(entries)).
-		Msg("loaded decrypted tx candidates for block classification")
+		var entries []batchEntry
+		indexByHash := make(map[string]int)
 
-	if len(entries) == 0 {
-		return nil
-	}
-
-	for blockPos, tx := range txs {
-		h := tx.Hash()
-		expectedPos, ok := indexByHash[h.Hex()]
-		if !ok {
-			continue
+		for rows.Next() {
+			var (
+				hashBytes []byte
+				txIdx     int64
+				status    data.TxStatusVal
+				decID     int64
+				subID     int64
+			)
+			if err := rows.Scan(&hashBytes, &txIdx, &status, &decID, &subID); err != nil {
+				return err
+			}
+			h := common.BytesToHash(hashBytes)
+			indexByHash[h.Hex()] = len(entries)
+			entries = append(entries, batchEntry{
+				hash:             h,
+				status:           status,
+				txIndex:          txIdx,
+				decryptionKeyID:  decID,
+				submittedEventID: subID,
+			})
 		}
 
-		if err := tm.withTxLock(h, func() error {
+		log.Debug().
+			Int64("slot", slot).
+			Int("num_candidates", len(entries)).
+			Msg("loaded decrypted tx candidates for block classification")
+
+		if len(entries) == 0 {
+			return nil
+		}
+
+		for blockPos, tx := range txs {
+			h := tx.Hash()
+			expectedPos, ok := indexByHash[h.Hex()]
+			if !ok {
+				continue
+			}
+
 			status, pos := classifyWithPredecessors(expectedPos, blockPos, entries)
-			entries[expectedPos].status = status // update for later predecessor checks
+			entries[expectedPos].status = status
 
 			log.Debug().
 				Int64("slot", slot).
@@ -174,18 +174,15 @@ func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot i
 				TransactionSubmittedEventID: entries[expectedPos].submittedEventID,
 				BlockNumber:                 pgtype.Int8{Int64: blockNumber, Valid: true},
 			}); err != nil {
-				return err
+				log.Err(err).Hex("tx-hash", h.Bytes()).Msg("failed to upsert tx from block body")
+				continue
 			}
 
 			tm.markDone(h)
-			return nil
-		}); err != nil {
-			log.Err(err).Hex("tx-hash", h.Bytes()).Msg("failed to upsert tx from block body")
-			continue
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 func (tm *TxMapperDB) maybeHandleStoredBlock(ctx context.Context, slot int64) {
