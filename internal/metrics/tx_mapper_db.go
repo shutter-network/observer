@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -548,6 +549,39 @@ func (tm *TxMapperDB) HandleBlock(ctx context.Context, blockNumber int64, slot i
 	return nil
 }
 
+func (tm *TxMapperDB) maybeHandleStoredBlock(ctx context.Context, slot int64) {
+	storedBlock, err := tm.dbQuery.QueryBlockFromSlot(ctx, slot)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Err(err).Int64("slot", slot).Msg("failed to query stored block")
+		}
+		return
+	}
+
+	block, err := tm.ethClient.BlockByNumber(ctx, big.NewInt(storedBlock.BlockNumber))
+	if err != nil {
+		log.Err(err).
+			Int64("slot", slot).
+			Int64("block_number", storedBlock.BlockNumber).
+			Msg("failed to fetch stored block")
+		return
+	}
+
+	if err := tm.HandleBlock(ctx, storedBlock.BlockNumber, slot, block.Transactions()); err != nil {
+		log.Err(err).
+			Int64("slot", slot).
+			Int64("block_number", storedBlock.BlockNumber).
+			Msg("failed to handle stored block after decryption")
+	}
+}
+
+type txExecutionJob struct {
+	expectedIndex   int
+	decryptedTx     *types.Transaction
+	txSubEvent      data.TransactionSubmittedEvent
+	decryptionKeyID int64
+}
+
 func (tm *TxMapperDB) processTransactionExecution(
 	ctx context.Context,
 	te *TxExecution,
@@ -579,14 +613,16 @@ func (tm *TxMapperDB) processTransactionExecution(
 
 	slot := te.DecKeysAndMessages[0].Slot
 	expectedIdx := 0
+	jobs := make([]txExecutionJob, 0, len(txSubEvents))
 
-	var wg sync.WaitGroup
+	// First pass: decrypt and create initial decrypted_tx rows synchronously.
 	for _, txSubEvent := range txSubEvents {
 		decryptionKeyID, err := getDecryptionKeyID(txSubEvent, identityPreimageToDecKeyAndMsg)
 		if err != nil {
 			log.Err(err).Msg("error while trying to retrieve decryption key ID")
 			continue
 		}
+
 		decryptedTx, err := getDecryptedTX(txSubEvent, identityPreimageToDecKeyAndMsg)
 		if err != nil {
 			log.Err(err).Msg("error while trying to get decrypted tx hash")
@@ -613,16 +649,43 @@ func (tm *TxMapperDB) processTransactionExecution(
 			Uint8("tx-type", decryptedTx.Type()).
 			Msg("tx-data")
 
-		currExpected := expectedIdx
+		err = tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+			Slot:                        slot,
+			TxIndex:                     txSubEvent.TxIndex,
+			TxHash:                      decryptedTx.Hash().Bytes(),
+			TxStatus:                    data.TxStatusValPending,
+			InclusionPosition:           InclPosUnknown,
+			DecryptionKeyID:             decryptionKeyID,
+			TransactionSubmittedEventID: txSubEvent.ID,
+		})
+		if err != nil {
+			log.Err(err).Msg("failed to create decrypted tx")
+			continue
+		}
+
+		jobs = append(jobs, txExecutionJob{
+			expectedIndex:   expectedIdx,
+			decryptedTx:     decryptedTx,
+			txSubEvent:      txSubEvent,
+			decryptionKeyID: decryptionKeyID,
+		})
 		expectedIdx++
+	}
 
-		// channel to propagate errors between goroutines
+	// If the block already exists for this slot, classify now that rows are present.
+	tm.maybeHandleStoredBlock(ctx, slot)
+
+	var wg sync.WaitGroup
+	for _, job := range jobs {
+		currExpected := job.expectedIndex
+		decryptedTx := job.decryptedTx
+		txSubEvent := job.txSubEvent
+		decryptionKeyID := job.decryptionKeyID
+
 		txErrorSignalCh := make(chan error, 1)
-
 		wg.Add(2)
 
-		// First goroutine: Send transaction
-		go func(ctx context.Context, inclusionDelay int64, decryptedTx *types.Transaction, txSubEvent data.TransactionSubmittedEvent, slot int64, decryptionKeyID int64, txErrorSignalCh chan error) {
+		go func(ctx context.Context, decryptedTx *types.Transaction, txSubEvent data.TransactionSubmittedEvent, slot int64, decryptionKeyID int64, txErrorSignalCh chan error) {
 			defer wg.Done()
 
 			select {
@@ -634,75 +697,48 @@ func (tm *TxMapperDB) processTransactionExecution(
 					log.Err(err).Msg("failed to send transaction")
 					if err.Error() == "AlreadyKnown" {
 						log.Debug().Hex("tx-hash", decryptedTx.Hash().Bytes()).Msg("already known")
-						err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-							Slot:                        slot,
-							TxIndex:                     txSubEvent.TxIndex,
-							TxHash:                      decryptedTx.Hash().Bytes(),
-							TxStatus:                    data.TxStatusValPending,
-							InclusionPosition:           InclPosUnknown,
-							DecryptionKeyID:             decryptionKeyID,
-							TransactionSubmittedEventID: txSubEvent.ID,
-						})
-						if err != nil {
-							txErrorSignalCh <- fmt.Errorf("failed to create decrypted tx: %w", err)
-							return
-						}
-					} else {
-						txStatus := data.TxStatusValInvalid
-						if isFeeTooLowError(err) {
-							txStatus = data.TxStatusValInvalidfeetoolow
-						}
-						err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
-							Slot:                        slot,
-							TxIndex:                     txSubEvent.TxIndex,
-							TxHash:                      decryptedTx.Hash().Bytes(),
-							TxStatus:                    txStatus,
-							InclusionPosition:           InclPosUnknown,
-							DecryptionKeyID:             decryptionKeyID,
-							TransactionSubmittedEventID: txSubEvent.ID,
-						})
-						if err != nil {
-							log.Err(err).Msg("failed to create decrypted tx")
-						}
-						txErrorSignalCh <- fmt.Errorf("%w: %v", errSendTransaction, err)
 						return
 					}
-				} else {
-					log.Info().Hex("tx-hash", decryptedTx.Hash().Bytes()).Msg("transaction sent")
-					err := tm.dbQuery.CreateDecryptedTX(ctx, data.CreateDecryptedTXParams{
+
+					txStatus := data.TxStatusValInvalid
+					if isFeeTooLowError(err) {
+						txStatus = data.TxStatusValInvalidfeetoolow
+					}
+					err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
 						Slot:                        slot,
 						TxIndex:                     txSubEvent.TxIndex,
 						TxHash:                      decryptedTx.Hash().Bytes(),
-						TxStatus:                    data.TxStatusValPending,
+						TxStatus:                    txStatus,
 						InclusionPosition:           InclPosUnknown,
 						DecryptionKeyID:             decryptionKeyID,
 						TransactionSubmittedEventID: txSubEvent.ID,
+						BlockNumber:                 pgtype.Int8{},
 					})
 					if err != nil {
-						txErrorSignalCh <- fmt.Errorf("failed to create decrypted tx: %w", err)
-						return
+						log.Err(err).Msg("failed to upsert decrypted tx")
 					}
+					txErrorSignalCh <- fmt.Errorf("%w: %v", errSendTransaction, err)
+					return
 				}
-			}
-		}(ctx, tm.config.InclusionDelay, decryptedTx, txSubEvent, slot, decryptionKeyID, txErrorSignalCh)
 
-		// Second goroutine: Wait for receipt
+				log.Info().Hex("tx-hash", decryptedTx.Hash().Bytes()).Msg("transaction sent")
+			}
+		}(ctx, decryptedTx, txSubEvent, slot, decryptionKeyID, txErrorSignalCh)
+
 		go func(ctx context.Context, expectedIndex int, txHash common.Hash, txIndex int64, slot int64, decryptionKeyID int64, txSubEventID int64, txErrorSignalCh chan error) {
 			defer wg.Done()
 
-			// Fallback path: skip if block-time classification already finalized this tx.
 			if tm.isDone(txHash) {
 				return
 			}
 
-			// Wait for the receipt with a timeout
 			receipt, err := tm.waitForReceiptWithTimeout(ctx, txHash, ReceiptWaitTimeout, txErrorSignalCh)
 			if err != nil {
 				log.Err(err).Msg("")
 				if errors.Is(err, errSendTransaction) {
 					return
 				}
-				if !tm.isDone(txHash) { // guard against concurrent HandleBlock
+				if !tm.isDone(txHash) {
 					err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
 						Slot:                        slot,
 						TxIndex:                     txIndex,
@@ -716,12 +752,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 					if err != nil {
 						log.Err(err).Msg("failed to upsert decrypted tx")
 					}
-					// tm.markDone(txHash)
 				}
 				return
 			}
 
-			// receipt found
 			log.Info().Hex("tx-hash", receipt.TxHash.Bytes()).
 				Uint64("receipt-status", receipt.Status).
 				Msg("transaction receipt found")
@@ -764,11 +798,9 @@ func (tm *TxMapperDB) processTransactionExecution(
 			if err != nil {
 				log.Err(err).Msg("failed to update decrypted tx")
 			}
-		}(ctx, currExpected, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txSubEvent.ID,
-			txErrorSignalCh)
+		}(ctx, currExpected, decryptedTx.Hash(), txSubEvent.TxIndex, slot, decryptionKeyID, txSubEvent.ID, txErrorSignalCh)
 	}
 
-	// Wait for all routines to end
 	wg.Wait()
 	return nil
 }
