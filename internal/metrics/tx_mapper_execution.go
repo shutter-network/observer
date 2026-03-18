@@ -205,6 +205,11 @@ func (tm *TxMapperDB) processTransactionExecution(
 				return
 			}
 
+			// Block classification may have completed while we were waiting.
+			if tm.isDone(txHash) {
+				return
+			}
+
 			log.Info().Hex("tx-hash", receipt.TxHash.Bytes()).
 				Uint64("receipt-status", receipt.Status).
 				Msg("transaction receipt found")
@@ -212,6 +217,11 @@ func (tm *TxMapperDB) processTransactionExecution(
 			block, err := tm.ethClient.BlockByNumber(ctx, receipt.BlockNumber)
 			if err != nil {
 				log.Err(err).Uint64("block-number", receipt.BlockNumber.Uint64()).Msg("failed to retrieve block")
+				return
+			}
+
+			// Block classification may have completed while we were fetching the block.
+			if tm.isDone(txHash) {
 				return
 			}
 
