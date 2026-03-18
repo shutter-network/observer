@@ -42,6 +42,19 @@ type TxMapperDB struct {
 	genesisTimestamp uint64
 	slotDuration     uint64
 	statusDone       sync.Map
+	txLocks          sync.Map
+}
+
+func (tm *TxMapperDB) txLock(hash common.Hash) *sync.Mutex {
+	v, _ := tm.txLocks.LoadOrStore(hash.Hex(), &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
+func (tm *TxMapperDB) withTxLock(hash common.Hash, fn func() error) error {
+	mu := tm.txLock(hash)
+	mu.Lock()
+	defer mu.Unlock()
+	return fn()
 }
 
 type TxEventStore interface {

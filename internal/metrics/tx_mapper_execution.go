@@ -142,6 +142,10 @@ func (tm *TxMapperDB) processTransactionExecution(
 				txErrorSignalCh <- fmt.Errorf("transaction send cancelled due to context: %w", ctx.Err())
 				return
 			case <-time.After(time.Duration(tm.config.InclusionDelay) * time.Second):
+				if tm.isDone(decryptedTx.Hash()) {
+					return
+				}
+
 				if err := tm.ethClient.SendTransaction(ctx, decryptedTx); err != nil {
 					log.Err(err).Msg("failed to send transaction")
 					if err.Error() == "AlreadyKnown" {
@@ -153,15 +157,21 @@ func (tm *TxMapperDB) processTransactionExecution(
 					if isFeeTooLowError(err) {
 						txStatus = data.TxStatusValInvalidfeetoolow
 					}
-					err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
-						Slot:                        slot,
-						TxIndex:                     txSubEvent.TxIndex,
-						TxHash:                      decryptedTx.Hash().Bytes(),
-						TxStatus:                    txStatus,
-						InclusionPosition:           InclPosUnknown,
-						DecryptionKeyID:             decryptionKeyID,
-						TransactionSubmittedEventID: txSubEvent.ID,
-						BlockNumber:                 pgtype.Int8{},
+					err := tm.withTxLock(decryptedTx.Hash(), func() error {
+						if tm.isDone(decryptedTx.Hash()) {
+							return nil
+						}
+
+						return tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+							Slot:                        slot,
+							TxIndex:                     txSubEvent.TxIndex,
+							TxHash:                      decryptedTx.Hash().Bytes(),
+							TxStatus:                    txStatus,
+							InclusionPosition:           InclPosUnknown,
+							DecryptionKeyID:             decryptionKeyID,
+							TransactionSubmittedEventID: txSubEvent.ID,
+							BlockNumber:                 pgtype.Int8{},
+						})
 					})
 					if err != nil {
 						log.Err(err).Msg("failed to upsert decrypted tx")
@@ -183,12 +193,19 @@ func (tm *TxMapperDB) processTransactionExecution(
 
 			receipt, err := tm.waitForReceiptWithTimeout(ctx, txHash, ReceiptWaitTimeout, txErrorSignalCh)
 			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
 				log.Err(err).Msg("")
 				if errors.Is(err, errSendTransaction) {
 					return
 				}
-				if !tm.isDone(txHash) {
-					err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+				err := tm.withTxLock(txHash, func() error {
+					if tm.isDone(txHash) {
+						return nil
+					}
+
+					return tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
 						Slot:                        slot,
 						TxIndex:                     txIndex,
 						TxHash:                      txHash[:],
@@ -198,9 +215,9 @@ func (tm *TxMapperDB) processTransactionExecution(
 						TransactionSubmittedEventID: txSubEventID,
 						BlockNumber:                 pgtype.Int8{},
 					})
-					if err != nil {
-						log.Err(err).Msg("failed to upsert decrypted tx")
-					}
+				})
+				if err != nil {
+					log.Err(err).Msg("failed to upsert decrypted tx")
 				}
 				return
 			}
@@ -244,15 +261,26 @@ func (tm *TxMapperDB) processTransactionExecution(
 				Str("tx_status", string(txStatus)).
 				Msg("transaction receipt classified")
 
-			err = tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
-				Slot:                        slot,
-				TxIndex:                     txIndex,
-				TxHash:                      receipt.TxHash.Bytes(),
-				TxStatus:                    txStatus,
-				InclusionPosition:           inclusionPosition,
-				DecryptionKeyID:             decryptionKeyID,
-				TransactionSubmittedEventID: txSubEventID,
-				BlockNumber:                 pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
+			err = tm.withTxLock(txHash, func() error {
+				if tm.isDone(txHash) {
+					return nil
+				}
+
+				if err := tm.dbQuery.UpsertTX(ctx, data.UpsertTXParams{
+					Slot:                        slot,
+					TxIndex:                     txIndex,
+					TxHash:                      receipt.TxHash.Bytes(),
+					TxStatus:                    txStatus,
+					InclusionPosition:           inclusionPosition,
+					DecryptionKeyID:             decryptionKeyID,
+					TransactionSubmittedEventID: txSubEventID,
+					BlockNumber:                 pgtype.Int8{Int64: receipt.BlockNumber.Int64(), Valid: true},
+				}); err != nil {
+					return err
+				}
+
+				tm.markDone(txHash)
+				return nil
 			})
 			if err != nil {
 				log.Err(err).Msg("failed to update decrypted tx")
@@ -278,6 +306,10 @@ func (tm *TxMapperDB) waitForReceiptWithTimeout(ctx context.Context, txHash comm
 
 func (tm *TxMapperDB) waitForReceipt(ctx context.Context, txHash common.Hash, txErrorSignalCh chan error) (*types.Receipt, error) {
 	for {
+		if tm.isDone(txHash) {
+			return nil, context.Canceled
+		}
+
 		// check if the context has been canceled or timed out
 		select {
 		case <-ctx.Done():
